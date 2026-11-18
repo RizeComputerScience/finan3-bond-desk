@@ -173,7 +173,7 @@
         E('line', { x1: x, x2: x, y1: py + 6, y2: py + (big ? 15 : 10), stroke: '#9DB0C2', 'stroke-width': big ? 1.4 : 0.8 }, scaleG);
         if (big && d > 0) T(scaleG, x, py + 28, String(d), { 'text-anchor': 'middle', class: 'fog disp', style: 'font-size:14px' });
       }
-      T(scaleG, px + 2, py + (geo.narrow ? 44 : 28), 'duration', { 'text-anchor': 'start', class: 'fog', style: 'font-size:12px' });
+      T(scaleG, px + armR + 4, py + 44, 'duration', { 'text-anchor': 'end', class: 'fog', style: 'font-size:12px' });
       scaleG.setAttribute('opacity', B.scaleOn);
       E('circle', { cx: px, cy: py, r: 7, fill: '#0A1524', stroke: '#9DB4CB', 'stroke-width': 1.5 }, G);
       annoG = E('g', { class: 'anno' }, G);
@@ -248,7 +248,7 @@
         const t = tokG[id]; if (!t) continue; const lines = B.annos[id]; const bx = px + t.tk.d * u * cs, by = py + t.tk.d * u * sn, ex = bx + t.w / 2 + 10;
         E('line', { x1: px, x2: ex + 6, y1: py, y2: py, stroke: '#9DB0C2', 'stroke-dasharray': '3 4', 'stroke-width': 1 }, annoG);
         if (Math.abs(by - py) > 2) { E('line', { x1: ex, x2: ex, y1: py, y2: by, stroke: '#FF8A7A', 'stroke-width': 2 }, annoG); E('path', { d: `M${ex - 4} ${by - 5} L${ex} ${by} L${ex + 4} ${by - 5}`, fill: 'none', stroke: '#FF8A7A', 'stroke-width': 2 }, annoG); }
-        const ty = Math.max(py, by) + (geo.narrow ? 46 : 62);
+        const ty = Math.max(py, by) + (geo.narrow ? 66 : 78);
         lines.forEach((ln, i) => T(annoG, bx, ty + i * (geo.narrow ? 17 : 24), ln.text, { 'text-anchor': 'middle', class: (ln.cls || '') + ' disp', style: `font-size:${geo.narrow ? (ln.big ? 17 : 14) : (ln.big ? 26 : 19)}px` }));
       }
     };
@@ -705,6 +705,7 @@
       answered() { tilt(); },
       layout(Wd, Hd) {
         const g = beamLayout(Wd, Hd, { py: 0.52 }); backdrop(Wd, Hd, { pool: [g.px + g.armR * 0.3, g.py + 60, g.armR * 1.1], cone: [g.px + g.armR * 0.35, g.py + 40, g.armR * 0.85] });
+        tok.forEach((t, k) => { const b = W0.DUR_BONDS[k]; t.label = NARROW() ? String(Math.round(b.d)) : b.label; t.sub = NARROW() ? b.sub.replace(' bond', '') : b.sub; });
         beam.build(svg, g.px, g.py, g.armL, g.armR, Wd, Hd); overlay.innerHTML = '';
         if (L.done) tilt(); else describe('Three bonds on the beam, at durations 2, 8 and 17. Rates are about to rise 1 point.');
         if (L.choice != null) this.selectQuiz(Number(L.choice));
@@ -895,7 +896,7 @@
         const R = n ? 34 : 58, dcx = n ? 62 : g.px, dcy = n ? Hd - 60 : Math.min(Hd - 100, g.py + 230); dial.build(svg, dcx, dcy, R);
         this._dialLab = T(svg, dcx + R + (n ? 26 : 44), dcy - (n ? 8 : 12), 'The Fed’s dial', { class: 'fog', style: `font-size:${n ? 12 : 15}px` });
         this._dialHint = T(svg, dcx + R + (n ? 26 : 44), dcy + (n ? 10 : 14), '', { class: 'sod disp', style: `font-size:${n ? 15 : 22}px` });
-        this._final = T(svg, n ? 16 : g.px + g.armR * 0.25, n ? Hd * 0.72 : Hd - 40, '', { class: 'disp', style: `font-size:${n ? 18 : 26}px;font-weight:800` });
+        this._final = T(svg, n ? 16 : 32, n ? Hd * 0.72 : Hd - 40, '', { class: 'disp', style: `font-size:${n ? 18 : 26}px;font-weight:800` });
         valOdo = Odo(svg, { size: n ? 18 : 28, anchor: 'end' }).at(geo.x + geo.w, geo.y - (n ? 10 : 14));
         lossOdo = Odo(svg, { size: n ? 16 : 24, anchor: 'end', tcls: 'disp coral' }).at(geo.x + geo.w, geo.y + geo.h + (n ? 24 : 34));
         this._who = T(svg, Wd - 16, Hd - 12, '', { 'text-anchor': 'end', class: 'fog', style: 'font-size:12px' });
