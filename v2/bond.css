@@ -92,10 +92,10 @@ main:focus { outline: none; }
 .world .disabled, .world .disabled * { pointer-events: none !important; }
 
 /* ---------- the console ---------- */
-.console { border-left: 1px solid var(--rule); padding: 30px 34px 40px; overflow-y: auto; background: linear-gradient(90deg, rgba(14, 27, 45, .6), var(--night) 40%); }
+.console { border-left: 1px solid var(--rule); padding: 22px 30px 30px; overflow-y: auto; background: linear-gradient(90deg, rgba(14, 27, 45, .6), var(--night) 40%); }
 .kicker { color: var(--fog); font-size: 14px; margin: 0 0 6px; }
-.console h1, .console h2 { font: 800 50px/0.95 var(--display); margin: 0 0 14px; letter-spacing: .005em; }
-.console h2 { font-size: 44px; }
+.console h1, .console h2 { font: 800 50px/0.95 var(--display); margin: 0 0 12px; letter-spacing: .005em; }
+.console h2 { font-size: 34px; margin-bottom: 10px; }
 .console p { margin: 0 0 14px; max-width: 36em; }
 .console .lead { font-size: 18px; }
 .console .place { color: var(--fog); }
@@ -116,7 +116,7 @@ main:focus { outline: none; }
 fieldset { border: 0; padding: 0; margin: 6px 0 0; min-width: 0; }
 legend { padding: 0; margin: 0 0 10px; font-weight: 600; }
 .tickets { display: grid; gap: 8px; }
-.ticket { position: relative; display: flex; gap: 12px; align-items: flex-start; padding: 13px 14px 13px 14px; border: 1px solid var(--engrave); border-radius: 8px; background: rgba(22, 38, 58, .55); cursor: pointer; line-height: 1.4; font-size: 16px; transition: border-color .15s, background .15s; }
+.ticket { position: relative; display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--engrave); border-radius: 8px; background: rgba(22, 38, 58, .55); cursor: pointer; line-height: 1.35; font-size: 15px; transition: border-color .15s, background .15s; }
 .ticket:hover { border-color: var(--fog); }
 .ticket input { appearance: none; -webkit-appearance: none; margin: 2px 0 0; width: 18px; height: 18px; border: 2px solid var(--fog); border-radius: 50%; flex: none; display: grid; place-content: center; }
 .ticket input::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--sodium); transform: scale(0); transition: transform .15s; }
@@ -178,10 +178,11 @@ details.sources a { color: var(--fog); }
 .code { font: 700 1.15em/1 var(--display); letter-spacing: .06em; color: var(--chalk); }
 
 /* the note */
-.ledger { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 8px; }
+.ledger { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 6px; }
+.ledger label { font-size: 14px; }
 .ledger label { display: block; font-weight: 600; margin-bottom: 6px; }
 .ledger label span { color: var(--fog); font-weight: 400; }
-.ledger textarea { width: 100%; min-height: 76px; resize: vertical; background: rgba(22, 38, 58, .55); color: var(--chalk); border: 1px solid var(--engrave); border-radius: 6px; padding: 10px 12px; font: 400 16px/1.45 var(--text); }
+.ledger textarea { width: 100%; min-height: 64px; resize: vertical; background: rgba(22, 38, 58, .55); color: var(--chalk); border: 1px solid var(--engrave); border-radius: 6px; padding: 10px 12px; font: 400 16px/1.45 var(--text); }
 .ledger textarea:focus { border-color: var(--sodium); }
 .wc { color: var(--fog); font-size: 14px; }
 
@@ -218,6 +219,27 @@ details.sources a { color: var(--fog); }
 .stamp.ok { color: var(--sodium); } .stamp.no { color: var(--coral); }
 @keyframes stampIn { from { opacity: 0; transform: translateX(-50%) rotate(-4deg) scale(1.6); } to { opacity: 1; transform: translateX(-50%) rotate(-4deg) scale(1); } }
 @keyframes stampOut { to { opacity: 0; } }
+/* people and the round-two controls */
+.speaker { display: flex; gap: 14px; align-items: flex-start; padding: 12px 14px; background: rgba(22, 38, 58, .6); border: 1px solid var(--engrave); border-radius: 12px; margin: 2px 0 12px; }
+.speaker .portrait { flex: none; }
+.speaker .who { font-size: 12.5px; color: var(--fog); margin: 0 0 3px; }
+.speaker .say { font-size: 17px; line-height: 1.45; margin: 0; }
+.speaker.ok { border-color: rgba(255, 180, 71, .65); }
+.speaker.bad { border-color: rgba(255, 138, 122, .65); }
+.speaker.pop { animation: pop .35s ease; }
+@keyframes pop { from { transform: translateY(6px); opacity: .4; } to { transform: none; opacity: 1; } }
+.ask { font-size: 15px; color: var(--fog); margin: 4px 0 8px !important; }
+.ask b { color: var(--chalk); }
+.setter { display: flex; align-items: center; gap: 10px; margin: 4px 0; }
+.setter .step { width: 46px; height: 46px; border-radius: 8px; border: 1px solid var(--engrave); background: var(--steel); color: var(--chalk); font: 700 26px/1 var(--display); cursor: pointer; touch-action: manipulation; }
+.setter .step:hover { border-color: var(--fog); }
+.setter output { font: 700 24px/1.1 var(--display); color: var(--sodium); min-width: 10ch; text-align: center; }
+.tickets.two { grid-template-columns: 1fr 1fr; }
+.typein { display: flex; align-items: center; gap: 8px; font: 700 24px/1 var(--display); }
+.typein input { font: 700 26px/1 var(--display); color: var(--chalk); background: rgba(10, 21, 36, .6); border: 0; border-bottom: 2px solid var(--sodium); width: 5em; text-align: right; padding: 6px; }
+.credit { font-size: 14px; color: var(--fog); margin-top: 14px !important; }
+.scorecard.long li { padding: 4px 0; font-size: 14px; }
+.scorecard.long .sc-big { font-size: 84px; }
 footer { border-top: 1px solid var(--rule); color: var(--fog); font-size: 13px; padding: 10px 24px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 
 @media (min-width: 901px) { body { height: 100vh; overflow: hidden; } main { min-height: 0; } .stage { min-height: 0; } .console { overflow-y: auto; } }
@@ -228,12 +250,18 @@ footer { border-top: 1px solid var(--rule); color: var(--fog); font-size: 13px; 
   .brand .sub { display: none; }
   .tool .lbl { display: none; }
   main { grid-template-columns: 1fr; }
-  .stage { min-height: 0; height: min(58vh, 470px); }
-  .console { border-left: 0; border-top: 1px solid var(--rule); padding: 20px 16px 30px; overflow: visible; background: var(--night); }
-  .console h1 { font-size: 44px; } .console h2 { font-size: 38px; }
+  .stage { min-height: 0; height: min(38vh, 380px); }
+  .brand .name { font-size: 22px; } .tool { min-height: 34px; padding: 6px 9px; } .top { padding: 8px 14px 4px; } .notch { height: 34px; }
+  .console h2 { display: none; } .ledger { grid-template-columns: 1fr; }
+  .console { border-left: 0; border-top: 1px solid var(--rule); padding: 12px 14px 24px; overflow: visible; background: var(--night); }
+  .console h1 { font-size: 40px; } .console h2 { font-size: 26px; margin-bottom: 8px; }
+  .console .kicker { display: none; }
+  .speaker { padding: 9px 10px; gap: 10px; margin-bottom: 8px; } .speaker .portrait { width: 42px; height: 42px; } .speaker .say { font-size: 15px; } .speaker .who { font-size: 11.5px; }
+  .ask { font-size: 14px; } .ticket { font-size: 14px; padding: 8px 10px; } .actions { margin: 10px 0 4px; } .pager { margin-top: 12px; }
   .notch { width: 26px; }
   .stageledger { inset: 6% 4% 10%; } .stageledger h3 { font-size: 26px; padding: 10px 10px 8px; } .stageledger div { padding: 10px; font-size: 13px; }
   .slip { width: 82%; }
+  main:has(.stage.tallstage) .console { order: -1; }
   .stage.tallstage { height: auto; padding: 22px 0; }
   .stage.tallstage .overlay { position: relative; inset: auto; }
   .stage.tallstage .scorecard { position: relative; left: auto; top: auto; transform: none; margin: 0 auto; }

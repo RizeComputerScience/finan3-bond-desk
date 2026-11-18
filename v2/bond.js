@@ -117,7 +117,7 @@
     E('rect', { x: -w / 2, y: -hgt, width: w, height: hgt, rx: 3, fill: 'url(#paperG)' }, g);
     E('rect', { x: -w / 2 + 3.5, y: -hgt + 3.5, width: w - 7, height: hgt - 7, rx: 2, fill: 'none', stroke: '#0A1524', 'stroke-width': 1 }, g);
     E('rect', { x: -w / 2 + 6, y: -hgt + 6, width: w - 12, height: hgt - 12, rx: 1.5, fill: 'none', stroke: '#0A1524', 'stroke-width': 0.6, 'stroke-dasharray': '1.5 2' }, g);
-    const fs = Math.max(12, Math.min(22, w * 0.2));
+    const fs = Math.max(10, Math.min(22, w * 0.2, (w - 14) / (String(title).length * 0.48)));
     T(g, 0, -hgt / 2 + (sub ? 0 : fs * 0.35), title, { 'text-anchor': 'middle', class: 'disp night', style: `font-size:${fs}px;font-weight:800` });
     if (sub) T(g, 0, -hgt / 2 + fs * 0.95, sub, { 'text-anchor': 'middle', class: 'night', style: `font-size:${Math.max(9, fs * 0.5)}px` });
     return g;
@@ -323,139 +323,153 @@
   }
 
   // ======================= state =======================
-  let S = { code: '', tasks: [], log: {}, memo: '', notes: {}, calls: {}, at: 'start', practice: 0 };
+  // Two ways to play. Class mode is the graded desk (eleven steps, receipt). Friend mode is the seven calls with no
+  // arithmetic, a fresh random desk each time, nothing saved, ending on the scorecard.
+  let S = { code: '', tasks: [], log: {}, memo: '', notes: {}, calls: {}, at: 'start', practice: 0, friend: false };
   const blankLog = () => { const l = {}; D.STEPS.forEach((s) => { l[s.id] = { done: false, attempts: 0, help: 0 }; }); return l; };
-  function save() { if (S.practice || !S.code) return; store.set(KEY + ':' + D.seedFor(S.code), { code: S.code, log: S.log, memo: S.memo, notes: S.notes, calls: S.calls, at: S.at }); store.set(KEY + ':last', S.code); }
+  function save() { if (S.practice || S.friend || !S.code) return; store.set(KEY + ':' + D.seedFor(S.code), { code: S.code, log: S.log, memo: S.memo, notes: S.notes, calls: S.calls, at: S.at }); store.set(KEY + ':last', S.code); }
   function startFor(code) {
-    S.code = h.normCode(code); S.tasks = D.buildTasks(S.code); S.practice = 0;
+    S.code = h.normCode(code); S.tasks = D.buildTasks(S.code); S.practice = 0; S.friend = false;
     const saved = store.get(KEY + ':' + D.seedFor(S.code));
     S.log = saved && saved.log ? saved.log : blankLog(); D.STEPS.forEach((s) => { if (!S.log[s.id]) S.log[s.id] = { done: false, attempts: 0, help: 0 }; });
     S.memo = saved && saved.memo ? saved.memo : ''; S.notes = saved && saved.notes ? saved.notes : {}; S.calls = saved && saved.calls ? saved.calls : {}; renderCalls();
     S.at = saved && saved.at ? saved.at : D.STEPS[0].id; save();
   }
+  function startFriend() { S = { code: h.newCode(), tasks: [], log: blankLog(), memo: '', notes: {}, calls: {}, at: 'q1', practice: 0, friend: true }; S.tasks = D.buildTasks(S.code + 'F'); renderCalls(); go('q1'); }
   const doneCount = () => D.STEPS.filter((s) => S.log[s.id] && S.log[s.id].done).length;
   const idx = (id) => D.STEPS.findIndex((x) => x.id === id);
   const task = (id) => S.tasks.find((t) => t.id === id);
   function markDone(id) { const L = S.log[id]; if (!L.done) { L.done = true; L.at = new Date().toISOString(); } save(); renderTape(); }
-  // The game ends at the bank (step 10) with the scorecard; the note and the receipt, which are for class, come after it.
-  const nextId = (id) => { if (id === 'bridge') return 'score'; if (id === 'score') return 'note'; const i = idx(id); return i < D.STEPS.length - 1 ? D.STEPS[i + 1].id : 'receipt'; };
+  const SEQ_CLASS = ['q1', 'quote', 'seesaw', 'q2', 'dur1', 'q3', 'spread', 'q4', 'pr', 'bridge', 'score', 'note', 'receipt'];
+  const SEQ_FRIEND = ['q1', 'seesaw', 'q2', 'q3', 'q4', 'bridge', 'score'];
+  const seq = () => (S.friend ? SEQ_FRIEND : SEQ_CLASS);
+  const nextId = (id) => { const q = seq(), i = q.indexOf(id); return i >= 0 && i < q.length - 1 ? q[i + 1] : (S.friend ? 'score' : 'receipt'); };
   const TITLES = { q1: 'Back to 2022', quote: 'Read a Quote', seesaw: 'The Seesaw', q2: 'Old Bond, New Rates', dur1: 'Duration', q3: 'Which Loses Most?', spread: 'Spread over Treasuries', q4: 'Dragovia', pr: 'One Sentence That Moved a Market', bridge: 'A Bank’s Big Bet', note: 'Bonds or Shares?' };
   const nextLabel = (id) => { const n = nextId(id); return n === 'receipt' ? 'Go to your receipt' : n === 'score' ? 'See how your calls went' : 'Next: ' + TITLES[n]; };
-  // Calls: the predictions a player makes before the world answers. Only the first try counts. Not graded; never on the receipt.
-  const CALLS = [['bet22', 'Where Dick’s bond ended 2022'], ['q1', 'Which rate rose more in 2022'], ['seesaw', 'Which bond falls further'], ['q2', 'What a fixed coupon does when rates rise'], ['q3', 'Which bond loses most'], ['q4', 'What Dragovia’s bonds do'], ['bridge', 'How much the bank loses']];
+  // Calls: what the player commits to before the world answers. Only the first try counts. Never graded or on the receipt.
+  const CALL_LABELS = { bet22: 'Where Dick’s bond ended 2022', q1: 'Which rate rose more in 2022', quote: 'What a quoted bond really costs', seesaw: 'Which bond falls further', q2: 'What a fixed coupon does when rates rise', dur1: 'How far the bond’s price falls', q3: 'Which bond loses most', spread: 'How big the spread is', q4: 'What Dragovia’s bonds do', pr: 'How much Puerto Rico’s bond lost', bridge: 'How much the bank loses' };
+  const callIds = () => (S.friend ? ['bet22', 'q1', 'seesaw', 'q2', 'q3', 'q4', 'bridge'] : ['bet22', 'q1', 'quote', 'seesaw', 'q2', 'dur1', 'q3', 'spread', 'q4', 'pr', 'bridge']);
   function recordCall(id, ok) { if (S.practice || !S.code || S.calls[id] != null) return; S.calls[id] = !!ok; save(); renderCalls(true); }
-  function renderCalls(bump) { const b = document.getElementById('callsBadge'); if (!b) return; const made = CALLS.filter(([k]) => S.calls && S.calls[k] != null), right = made.filter(([k]) => S.calls[k]).length; b.hidden = !S.code || !made.length; b.innerHTML = `Calls <b>${right}</b> of ${made.length}`; b.setAttribute('aria-label', `Your calls so far: ${right} right of ${made.length}`); if (bump && !RM) { b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump'); } }
+  function renderCalls(bump) { const b = document.getElementById('callsBadge'); if (!b) return; const made = callIds().filter((k) => S.calls && S.calls[k] != null), right = made.filter((k) => S.calls[k]).length; b.hidden = !S.code || !made.length; b.innerHTML = `Calls <b>${right}</b> of ${made.length}`; b.setAttribute('aria-label', `Your calls so far: ${right} right of ${made.length}`); if (bump && !RM) { b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump'); } }
 
   // ======================= the tape (step navigation) =======================
   function renderTape() {
     const ol = $('#tape'); ol.innerHTML = '';
-    $('#codeNote').innerHTML = S.code ? `Desk code <b class="code">${h.fmtCode(S.code)}</b>. Use it to continue on another computer.` : '';
+    $('#codeNote').innerHTML = S.code && !S.friend ? `Desk code <b class="code">${h.fmtCode(S.code)}</b>. Use it to continue on another computer.` : '';
     if (!S.code) return;
-    [...D.STEPS, { id: 'receipt', label: 'Receipt' }].forEach((s, i) => {
+    const items = S.friend ? SEQ_FRIEND.map((id) => ({ id })) : [...D.STEPS, { id: 'receipt' }];
+    items.forEach((s, i) => {
       const li = document.createElement('li'); const b = document.createElement('button'); b.type = 'button'; b.className = 'notch';
-      const done = s.id === 'receipt' ? doneCount() === D.STEPS.length : S.log[s.id].done;
+      const isEnd = s.id === 'receipt' || s.id === 'score';
+      const done = s.id === 'receipt' ? doneCount() === D.STEPS.length : s.id === 'score' ? false : S.log[s.id].done;
       if (done) b.classList.add('done'); if (S.at === s.id) b.setAttribute('aria-current', 'step');
-      const name = s.id === 'receipt' ? 'Receipt' : TITLES[s.id];
-      b.setAttribute('aria-label', (s.id === 'receipt' ? 'Receipt' : `Step ${i + 1}, ${name}`) + (s.id === 'receipt' ? '' : done ? ', finished' : ', not finished yet'));
-      b.title = name; b.innerHTML = `<span aria-hidden="true">${s.id === 'receipt' ? 'R' : i + 1}</span><span class="tick" aria-hidden="true"></span>`;
+      const name = s.id === 'receipt' ? 'Receipt' : s.id === 'score' ? 'Scorecard' : TITLES[s.id];
+      b.setAttribute('aria-label', isEnd ? name : `Step ${i + 1}, ${name}${done ? ', finished' : ', not finished yet'}`);
+      b.title = name; b.innerHTML = `<span aria-hidden="true">${s.id === 'receipt' ? 'R' : s.id === 'score' ? '★' : i + 1}</span><span class="tick" aria-hidden="true"></span>`;
       b.addEventListener('click', () => go(s.id)); li.appendChild(b); ol.appendChild(li);
     });
   }
 
+  // ======================= the people at the desk =======================
+  // Drawn in the night-desk style: busts in steel and sodium, no facial detail. Each has a role and a voice.
+  const PEOPLE = {
+    boss: { role: 'The treasurer, your boss' },
+    sales: { role: 'A bond salesman on the phone' },
+    customer: { role: 'A customer at the front desk' },
+    minister: { role: 'Dragovia’s finance minister' },
+    colleague: { role: 'The colleague who bought them' },
+    news: { role: 'The news, October 2017' },
+  };
+  function portraitBody(who) {
+    const sk = '#3C5672', rim = '#FFB447';
+    return {
+      boss: `<path d="M8 64c2-14 11-20 24-20s22 6 24 20z" fill="#1D3149"/><path d="M26 45l6 9 6-9" fill="#E9EEF2"/><ellipse cx="32" cy="28" rx="10" ry="12" fill="${sk}"/><path d="M21 30c-1-12 6-17 11-17s13 4 11 17c-2-6-6-9-11-9s-9 3-11 9z" fill="#0A1524"/><g fill="none" stroke="${rim}" stroke-width="1.4"><circle cx="28" cy="29" r="3.2"/><circle cx="36.5" cy="29" r="3.2"/><path d="M31.2 29h2.1"/></g>`,
+      sales: `<path d="M8 64c2-14 11-20 24-20s22 6 24 20z" fill="#2B425C"/><path d="M28 44h8l-4 20z" fill="${rim}"/><ellipse cx="32" cy="28" rx="10" ry="12" fill="${sk}"/><path d="M22 25c0-9 6-12 11-12 6 0 10 3 10 10-4-4-10-5-21 2z" fill="#0A1524"/><path d="M42 26c4 0 5 9 1 11" fill="none" stroke="#9DB0C2" stroke-width="1.6"/><circle cx="41" cy="38" r="2" fill="#9DB0C2"/>`,
+      customer: `<path d="M8 64c2-14 11-20 24-20s22 6 24 20z" fill="#3A4B5E"/><path d="M24 46l8 10 8-10" fill="none" stroke="#9DB0C2" stroke-width="1.5"/><ellipse cx="32" cy="29" rx="10" ry="12" fill="${sk}"/><path d="M21 28c0-10 5-14 11-14s11 4 11 14c-2-5-5-6-11-6s-9 1-11 6z" fill="#E9EEF2"/>`,
+      minister: `<path d="M8 64c2-14 11-20 24-20s22 6 24 20z" fill="#16263A"/><path d="M16 50l30 12" stroke="#FF8A7A" stroke-width="5"/><ellipse cx="32" cy="28" rx="10" ry="12" fill="${sk}"/><path d="M22 26c0-8 4-11 10-11s10 3 10 11c-3-4-6-5-10-5s-7 1-10 5z" fill="#2B425C"/><rect x="29" y="50" width="6" height="14" rx="2" fill="#0A1524"/><circle cx="32" cy="50" r="4" fill="#0A1524" stroke="#9DB0C2"/>`,
+      colleague: `<path d="M8 64c2-14 11-20 24-20s22 6 24 20z" fill="#24384F"/><path d="M22 44c3 6 17 6 20 0" fill="none" stroke="#0A1524" stroke-width="2"/><ellipse cx="32" cy="29" rx="10" ry="12" fill="${sk}"/><path d="M20 27c-1-11 6-15 12-15s14 4 12 15c-1-2-2-3-3-3-2 0-3 2-4 2-2 0-3-3-5-3s-3 3-5 3c-1 0-2-2-4-2-1 0-2 1-3 3z" fill="#0A1524"/><rect x="44" y="50" width="8" height="10" rx="1.5" fill="${rim}"/>`,
+      news: `<rect x="12" y="16" width="40" height="32" rx="2" fill="#E9EEF2"/><rect x="16" y="21" width="32" height="5" fill="#0A1524"/><path d="M16 31h32M16 36h32M16 41h20" stroke="#5A7590" stroke-width="2"/>`,
+    }[who] || '';
+  }
+  function portrait(who, size) {
+    const s = size || 56;
+    return `<svg class="portrait" viewBox="0 0 64 64" width="${s}" height="${s}" aria-hidden="true"><circle cx="32" cy="32" r="31" fill="#0E1B2D" stroke="#2B425C"/><g style="clip-path:circle(31px at 32px 32px)">${portraitBody(who)}</g></svg>`;
+  }
+  const speaker = (who, line) => `<div class="speaker" id="spk">${portrait(who)}<div><p class="who" id="spkWho">${esc(PEOPLE[who].role)}</p><p class="say" id="say">${line}</p></div></div>`;
+  function say(who, line, mood) {
+    const spk = $('#spk'); if (!spk) return; spk.querySelector('svg').outerHTML = portrait(who); $('#spkWho').textContent = PEOPLE[who].role; const p = $('#say'); p.innerHTML = line;
+    spk.className = 'speaker' + (mood ? ' ' + mood : ''); if (!RM) { spk.classList.remove('pop'); void spk.offsetWidth; spk.classList.add('pop'); }
+  }
+
   // ======================= console helpers =======================
   const con = $('#console');
-  const kicker = (id) => `${S.practice ? `<p class="practice"><b>Practice round ${S.practice}.</b> New numbers, not graded. Your receipt is unchanged.</p>` : ''}<p class="kicker">Step ${idx(id) + 1} of ${D.STEPS.length}</p>`;
-  const sourcesBox = (html) => (html ? `<details class="sources"><summary>Sources</summary>${html}</details>` : '');
-  const pager = (id) => { const i = idx(id); const prev = i > 0 ? D.STEPS[i - 1].id : null; const nxt = nextId(id); return `<nav class="pager" aria-label="Previous and next step">${prev ? `<button type="button" data-go="${prev}">Previous step</button>` : '<span></span>'}<button type="button" data-go="${nxt}">${nxt === 'receipt' ? 'Receipt' : 'Skip to the next step'}</button></nav>`; };
+  const kicker = (id) => `${S.practice ? `<p class="practice"><b>Practice round ${S.practice}.</b> New numbers, not graded.</p>` : ''}<p class="kicker">${S.friend ? 'Friend mode' : `Step ${idx(id) + 1} of ${D.STEPS.length}`}</p>`;
+  const pager = (id) => { const q = seq(), i = q.indexOf(id); const prev = i > 0 ? q[i - 1] : null; const nxt = nextId(id); return `<nav class="pager" aria-label="Previous and next step">${prev ? `<button type="button" data-go="${prev}">Back</button>` : '<span></span>'}<button type="button" data-go="${nxt}">${nxt === 'receipt' ? 'Receipt' : nxt === 'score' ? 'Skip to the scorecard' : 'Skip this step'}</button></nav>`; };
   function wireCommon(id) { $$('[data-go]', con).forEach((b) => b.addEventListener('click', () => go(b.dataset.go))); const nb = $('#nextBtn'); if (nb) nb.addEventListener('click', () => go(nextId(id))); }
-  function showNext(focus) { const r = $('#nextRow'); if (r) { r.hidden = false; if (focus) $('#nextBtn').focus({ preventScroll: false }); } }
+  // When a step is done, its controls give way to the way on, so the next action is always on screen.
+  function showNext(keep) { const r = $('#nextRow'); if (r) r.hidden = false; const c = $('#controls'); if (c && !keep) { c.hidden = true; $('#helpRow').hidden = true; $('#helpBox').innerHTML = ''; } }
   const nextRow = (id, done) => `<div class="actions" id="nextRow" ${done ? '' : 'hidden'}><button class="btn" type="button" id="nextBtn">${esc(nextLabel(id))}</button></div>`;
-
-  const SOURCES = {
-    q1: '<p>U.S. Treasury, <a href="https://home.treasury.gov/resource-center/data-chart-center/interest-rates/TextView?type=daily_treasury_yield_curve&field_tdr_date_value=2022" target="_blank" rel="noopener">Daily Treasury Par Yield Curve Rates, 2022</a>. Federal Reserve, <a href="https://www.federalreserve.gov/monetarypolicy/openmarket.htm" target="_blank" rel="noopener">Open Market Operations</a> (2022 rate decisions). Dick’s Sporting Goods, <a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001089063&type=10-K" target="_blank" rel="noopener">annual reports (Form 10-K)</a>: the 4.10% notes due 2052 and their fair value. The daily line for Dick’s bond is an estimate from the 30-year Treasury rate between those reported values.</p>',
-    quote: '<p>FINRA, <a href="https://www.finra.org/investors/investing/investment-products/bonds" target="_blank" rel="noopener">Bonds</a>: bond quotes are a percentage of face value.</p>',
-    dur1: '<p>FINRA, <a href="https://www.finra.org/investors/insights/bonds-interest-rate-changes-duration" target="_blank" rel="noopener">Brush Up on Bonds: Interest Rate Changes and Duration</a>.</p>',
-    pr: '<p>The Bond Buyer, <a href="https://www.bondbuyer.com/news/puerto-rico-municipal-bonds-fall-after-trumps-debt-forgiveness-remarks" target="_blank" rel="noopener">Puerto Rico municipal bonds fall after Trump’s debt forgiveness remarks</a>, October 4, 2017 (the general obligation 8% bonds of 2035). Fortune, <a href="https://fortune.com/2017/10/04/puerto-rico-donald-trump-debt-bankruptcy" target="_blank" rel="noopener">October 4, 2017</a>.</p>',
-    bridge: '<p>Board of Governors of the Federal Reserve System, <a href="https://www.federalreserve.gov/publications/files/svb-review-20230428.pdf" target="_blank" rel="noopener">Review of the Federal Reserve’s Supervision and Regulation of Silicon Valley Bank</a>, April 2023, page 22.</p>',
-  };
-
-  // A quiz step: tickets (styled radios) under the question; the scene can mirror the choice and react to the answer.
-  function checkConsole(s, opts) {
-    const L = S.log[s.id], q = C.quiz[s.quiz]; const cur = L.choice != null ? Number(L.choice) : null;
-    const order = W0.optOrder(q);
-    con.innerHTML = `${kicker(s.id)}<h2 id="t">${esc(TITLES[s.id])}</h2>${opts.lead ? `<p class="lead">${opts.lead}</p>` : ''}
-      <div id="qwrap" ${opts.hideQuestion ? 'hidden' : ''}><form id="qf" novalidate><fieldset><legend>${esc(opts.question || q.q)}</legend><div class="tickets">${order.map((j) => `<label class="ticket"><input type="radio" name="q" value="${j}" ${cur === j ? 'checked' : ''}><span>${esc(q.options[j])}</span></label>`).join('')}</div></fieldset>
-      <div class="actions"><button class="btn" type="submit">Check</button><span class="attempts" id="att">${L.attempts ? 'Checks so far: ' + L.attempts : ''}</span></div>
-      <div class="fb" id="fb" aria-live="polite"></div></form></div>${nextRow(s.id, L.done)}${opts.after || ''}${sourcesBox(opts.sources)}${pager(s.id)}`;
-    const form = $('#qf');
-    form.addEventListener('change', () => { const c = $('input[name=q]:checked', form); if (c && opts.onPick) opts.onPick(Number(c.value)); });
-    form.addEventListener('submit', (e) => {
-      e.preventDefault(); const c = $('input[name=q]:checked', form); const fb = $('#fb');
-      if (!c) { fb.className = 'fb bad'; fb.textContent = opts.choose || 'Choose an answer.'; return; }
-      const pick = Number(c.value); L.attempts = (L.attempts || 0) + 1; const ok = D.judgeQuiz(s.quiz, pick).ok; recordCall(s.id, ok);
-      if (ok || !L.done) L.choice = pick;
-      fb.className = 'fb ' + (ok ? 'ok' : 'bad'); fb.innerHTML = (ok ? '<b>Right.</b> ' : '<b>Not yet.</b> ') + esc(q.why[pick].replace(/^Right\.\s*/, '')) + (!ok && L.done ? ' Your earlier right answer is still saved.' : '');
-      if (ok) { markDone(s.id); Sound.chime(); showNext(false); } else Sound.miss(); stamp(ok ? (L.attempts === 1 ? 'Called it' : 'Right') : 'Not yet', ok);
-      $('#att').textContent = 'Checks so far: ' + L.attempts; save();
-      if (opts.onAnswer) opts.onAnswer(pick, ok);
-    });
+  // One step's console: title, the person who wants something, the controls, what happened, and the way on.
+  function shell(s, o) {
+    con.innerHTML = `${kicker(s.id)}<h2 id="t">${esc(TITLES[s.id])}</h2>${speaker(o.who, o.line)}
+      <div id="controls">${o.controls || ''}</div><div class="fb" id="fb" aria-live="polite"></div><div class="actions" id="helpRow" hidden></div><div class="helpbox" id="helpBox" aria-live="polite"></div>
+      ${nextRow(s.id, o.done)}${pager(s.id)}`;
     wireCommon(s.id);
-    return { pick(j) { const r = $(`input[name=q][value="${j}"]`, form); if (r) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); } }, reveal() { $('#qwrap').hidden = false; } };
+  }
+  // Answers you tap: a set of styled radios. Returns the selected value through onPick.
+  const chips = (name, opts, cur, cls) => `<div class="tickets ${cls || ''}" role="radiogroup">${opts.map(([v, tx]) => `<label class="ticket"><input type="radio" name="${name}" value="${esc(v)}" ${String(cur) === String(v) ? 'checked' : ''}><span>${tx}</span></label>`).join('')}</div>`;
+  function onChips(name, fn) { $$(`input[name="${name}"]`, con).forEach((r) => r.addEventListener('change', () => fn(r.value))); }
+  // A number the player sets by dragging on the stage, with − and + here for touch and keyboard.
+  function Setter(o) {
+    const st = { v: o.value, listeners: [] };
+    st.snap = (v) => Math.min(o.max, Math.max(o.min, Math.round((v - o.min) / o.step) * o.step + o.min));
+    st.set = (v, user) => { v = +st.snap(v).toFixed(6); if (v === st.v) return; st.v = v; const r = $('#setVal'); if (r) r.innerHTML = o.fmt(v); st.listeners.forEach((f) => f(v, user)); if (user) Sound.tick(); };
+    st.on = (f) => st.listeners.push(f);
+    st.html = () => `<div class="setter" role="group" aria-label="${esc(o.label)}"><button type="button" class="step" data-d="-1" aria-label="Less">−</button><output id="setVal" aria-live="polite">${o.fmt(st.v)}</output><button type="button" class="step" data-d="1" aria-label="More">+</button></div>`;
+    st.wire = () => { $$('.setter .step', con).forEach((b) => { let rep = null; const go1 = () => st.set(st.v + Number(b.dataset.d) * o.step, true);
+      b.addEventListener('click', go1); b.addEventListener('pointerdown', () => { rep = setTimeout(function r() { go1(); rep = setTimeout(r, 70); }, 380); }); ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => b.addEventListener(ev, () => clearTimeout(rep))); }); };
+    // a stage handle: pointer drag through toVal(clientX, clientY), and arrow keys
+    st.handle = (el, toVal, flipV) => { // flipV: the value grows downward on screen, so Down means more
+      el.setAttribute('tabindex', '0'); el.setAttribute('role', 'slider'); el.setAttribute('aria-label', o.label); el.setAttribute('aria-valuemin', o.min); el.setAttribute('aria-valuemax', o.max); el.classList.add('grab');
+      const aria = () => { el.setAttribute('aria-valuenow', st.v); el.setAttribute('aria-valuetext', String(o.fmt(st.v)).replace(/<[^>]+>/g, '')); }; aria(); st.on(aria);
+      el.addEventListener('pointerdown', (e) => { e.preventDefault(); el.setPointerCapture(e.pointerId); st.drag = true; el.focus({ preventScroll: true }); st.set(toVal(e.clientX, e.clientY), true); });
+      el.addEventListener('pointermove', (e) => { if (st.drag) st.set(toVal(e.clientX, e.clientY), true); });
+      el.addEventListener('pointerup', () => { st.drag = false; }); el.addEventListener('pointercancel', () => { st.drag = false; });
+      el.addEventListener('keydown', (e) => { const k = e.key; const d = k === 'ArrowRight' ? 1 : k === 'ArrowLeft' ? -1 : k === 'ArrowUp' ? (flipV ? -1 : 1) : k === 'ArrowDown' ? (flipV ? 1 : -1) : k === 'PageUp' ? (flipV ? -10 : 10) : k === 'PageDown' ? (flipV ? 10 : -10) : 0; if (d) { e.preventDefault(); st.set(st.v + d * o.step, true); } });
+    };
+    return st;
+  }
+  // The help ladder for calculation steps: after a miss, show the first line; after two, every line (version 1's text).
+  function helpLadder(t, L) {
+    const row = $('#helpRow'); const fails = L.fails || 0; if (!fails || L.done) { row.hidden = true; return; }
+    row.hidden = false; row.innerHTML = ['Show me how to start', 'Show me the answer'].slice(0, Math.min(2, fails)).map((lab, i) => `<button class="btn small quiet" type="button" data-l="${i + 1}">${lab}</button>`).join('');
+    $$('button[data-l]', row).forEach((b) => b.addEventListener('click', () => { const lvl = Number(b.dataset.l); L.help = Math.max(L.help || 0, lvl); save(); $('#helpBox').innerHTML = C.helpText(t, lvl, h); }));
+  }
+  // Judge a calculation task from rows the player set or chose; record the attempt, the call and the receipt fields.
+  function judgeRows(s, rows, choice) {
+    const t = task(s.id), L = S.log[s.id]; const res = C.judgeTask(t, { rows, choice: choice || null, value: null }, h);
+    L.attempts = (L.attempts || 0) + 1; recordCall(s.id, res.ok);
+    if (res.ok || !L.done) { L.rows = rows; L.choice = choice || null; L.value = null; }
+    if (res.ok) { markDone(s.id); Sound.chime(); $('#helpRow').hidden = true; } else { L.fails = (L.fails || 0) + 1; Sound.miss(); helpLadder(t, L); }
+    save(); stamp(res.ok ? (L.attempts === 1 ? 'Called it' : 'Right') : 'Not yet', res.ok); return res;
+  }
+  const fb = (html, ok) => { const f = $('#fb'); f.className = 'fb ' + (ok == null ? '' : ok ? 'ok' : 'bad'); f.innerHTML = html; };
+  // A one-question check from version 1's quiz, answered with chips; the scene can mirror and react.
+  function quizChips(s, onAnswer) {
+    const L = S.log[s.id], q = C.quiz[s.quiz]; const order = W0.optOrder(q);
+    return { html: chips('q', order.map((j) => [j, esc(q.options[j])]), L.choice) + `<div class="actions"><button class="btn" type="button" id="checkBtn">Lock it in</button></div>`,
+      wire(onPick) {
+        if (onPick) onChips('q', (v) => onPick(Number(v)));
+        $('#checkBtn').addEventListener('click', () => {
+          const c = $('input[name=q]:checked', con); if (!c) { fb('Pick an answer first.', false); return; }
+          const pick = Number(c.value); L.attempts = (L.attempts || 0) + 1; const ok = D.judgeQuiz(s.quiz, pick).ok; recordCall(s.id, ok);
+          if (ok || !L.done) L.choice = pick; if (ok) { markDone(s.id); Sound.chime(); showNext(); } else Sound.miss();
+          stamp(ok ? (L.attempts === 1 ? 'Called it' : 'Right') : 'Not yet', ok); save(); onAnswer(pick, ok, q.why[pick].replace(/^Right\.\s*/, ''));
+        });
+      } };
   }
 
-  // The calculation strip: the worked example (filled) and the student's lines (inputs), one calculation per line.
-  function stripHtml(lines, o) {
-    return `<div class="strip ${o.example ? 'example' : ''}" ${o.example ? 'tabindex="0" role="button" aria-label="Worked example. Show it on the stage."' : ''} id="${o.id}"><div class="cap2"><b>${o.example ? 'Worked example' : 'Your numbers'}</b><span>${esc(o.cap || '')}</span></div>
-      ${lines.map((l, i) => {
-        const res = (o.example || !l.input) ? `<span>${esc(SHOW[l.kind](l.num))}</span>`
-          : `<label class="sr-only" for="r${i}">${esc(l.label)}</label><input id="r${i}" class="rowin" data-row="${i}" inputmode="decimal" autocomplete="off" placeholder="${PH[l.kind]}" value="${o.rows && o.rows[i] != null ? esc(o.rows[i]) : ''}"><span class="mark" id="mk${i}" aria-live="polite"></span>`;
-        return `<div class="line"><span class="lbl">${esc(l.label)}</span><span class="calc">${esc(l.calc)}</span><span class="res">${res}</span></div>`;
-      }).join('')}</div>`;
-  }
-  const EX = {
-    quote: { cap: 'A bond is quoted at 98.25.', t: { id: 'quote', q: 98.25 } },
-    dur1: { cap: 'You hold $10,000 of a bond with duration 7, and rates rise 0.5 point.', t: { id: 'dur1', D: 7, dy: 0.5, A: 10000 } },
-    spread: { cap: 'A company’s 10-year bond yields 6.10% and the 10-year Treasury yields 4.35%.', t: { id: 'spread', corp: 6.10, tsy: 4.35, pts: 1.75 } },
-    pr: { cap: 'A bond falls from 80 to 60 cents on the dollar.', t: { id: 'pr', p0: 80, p1: 60 } },
-    bridge: { cap: 'A bank holds $4 billion of bonds with duration 5, and rates rise 2 points.', t: { id: 'bridge', A: 4, D: 5, dy: 2 } },
-  };
-  function ladderConsole(s, o) {
-    const t = task(s.id), L = S.log[s.id], lines = C.linesFor(t), ex = EX[s.id];
-    con.innerHTML = `${kicker(s.id)}<h2 id="t">${esc(TITLES[s.id])}</h2>${o.place ? `<p class="place">${o.place}</p>` : ''}<p class="lead">${o.body}</p>
-      ${stripHtml(C.linesFor(ex.t), { example: true, cap: ex.cap, id: 'exStrip' })}
-      <form id="ask" novalidate>${stripHtml(lines, { rows: L.rows, id: 'myStrip', cap: o.myCap || '' })}
-      ${lines.some((l) => l.input && l.kind === 'pct') ? '<p class="hint">Type a percentage like 7.5%.</p>' : ''}
-      ${o.choice ? `<fieldset style="margin-top:16px"><legend>${esc(o.choice.legend)}</legend><div class="tickets chips">${o.choice.options.map(([v, tx]) => `<label class="ticket"><input type="radio" name="dec" value="${v}" ${L.choice === v ? 'checked' : ''}><span>${esc(tx)}</span></label>`).join('')}</div></fieldset>` : ''}
-      <div class="actions"><button class="btn" type="submit">Check</button><span class="attempts" id="att">${L.attempts ? 'Checks so far: ' + L.attempts : ''}</span></div>
-      <div class="fb" id="fb" aria-live="polite"></div><div class="actions" id="helpRow" hidden></div><div class="helpbox" id="helpBox" aria-live="polite"></div></form>
-      ${o.afterForm || ''}${nextRow(s.id, L.done && !o.holdNext)}${sourcesBox(SOURCES[s.id])}${pager(s.id)}`;
-    const rowsNow = () => { const r = []; $$('.rowin', con).forEach((x) => { r[Number(x.dataset.row)] = x.value; }); return r; };
-    $$('.rowin', con).forEach((x) => { x.addEventListener('input', () => { if (!L.done) { L.rows = rowsNow(); save(); } }); x.addEventListener('focus', () => o.onFocusMine && o.onFocusMine()); });
-    const exS = $('#exStrip'); const showEx = () => o.onFocusExample && o.onFocusExample(); exS.addEventListener('click', showEx); exS.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showEx(); } });
-    function renderHelp() {
-      const row = $('#helpRow'); const fails = L.fails || 0; if (!fails || L.done) { row.hidden = true; return; }
-      row.hidden = false; const labels = ['Show me the first line', 'Show me every line'];
-      row.innerHTML = labels.slice(0, Math.min(2, fails)).map((lab, i) => `<button class="btn small quiet" type="button" data-l="${i + 1}">${lab}</button>`).join('');
-      $$('button[data-l]', row).forEach((b) => b.addEventListener('click', () => { const lvl = Number(b.dataset.l); L.help = Math.max(L.help || 0, lvl); save(); $('#helpBox').innerHTML = C.helpText(t, lvl, h); }));
-    }
-    renderHelp();
-    function mark(res) {
-      (res.rowRes || []).forEach((rr, i) => { const x = $(`.rowin[data-row="${i}"]`), mk = $('#mk' + i); if (!x || rr == null) return; x.classList.toggle('good', rr.ok); x.classList.toggle('wrong', !rr.ok); mk.className = 'mark ' + (rr.ok ? 'ok' : 'no'); mk.textContent = rr.ok ? '✓ right' : '✗ not yet'; });
-      if (o.onRows) o.onRows(res.rowRes || [], res.ok);
-    }
-    $('#ask').addEventListener('submit', (e) => {
-      e.preventDefault(); const rows = rowsNow(); const ch = ($('input[name=dec]:checked', con) || {}).value || null;
-      const res = C.judgeTask(t, { rows, choice: ch, value: null }, h); L.attempts = (L.attempts || 0) + 1; const fb = $('#fb'); if (o.call) recordCall(s.id, res.ok);
-      if (res.ok || !L.done) { L.rows = rows; L.choice = ch; L.value = null; }
-      mark(res); stamp(res.ok ? 'Right' : 'Not yet', res.ok);
-      if (res.ok) { markDone(s.id); Sound.chime(); fb.className = 'fb ok'; fb.innerHTML = '<b>Right.</b> ' + (o.praise ? o.praise(t) : C.praise(t, h)); $('#helpRow').hidden = true; if (!o.holdNext) showNext(false); if (o.onDone) o.onDone(); }
-      else { L.fails = (L.fails || 0) + 1; Sound.miss(); fb.className = 'fb bad'; fb.innerHTML = '<b>Not yet.</b> ' + esc(res.msg || 'Check your work and try again.'); renderHelp(); }
-      $('#att').textContent = 'Checks so far: ' + L.attempts; save();
-    });
-    wireCommon(s.id);
-    if (L.done && L.rows) { const res = C.judgeTask(t, { rows: L.rows, choice: L.choice }, h); mark(res); }
-    return { t, lines };
-  }
+  const SOURCES = '<p>U.S. Treasury, <a href="https://home.treasury.gov/resource-center/data-chart-center/interest-rates/TextView?type=daily_treasury_yield_curve&field_tdr_date_value=2022" target="_blank" rel="noopener">Daily Treasury Par Yield Curve Rates</a>, 2022. Federal Reserve, <a href="https://www.federalreserve.gov/monetarypolicy/openmarket.htm" target="_blank" rel="noopener">2022 rate decisions</a>. Dick’s Sporting Goods, <a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001089063&type=10-K" target="_blank" rel="noopener">annual reports</a> (the daily line for its bond is an estimate between reported values). FINRA, <a href="https://www.finra.org/investors/investing/investment-products/bonds" target="_blank" rel="noopener">Bonds</a> and <a href="https://www.finra.org/investors/insights/bonds-interest-rate-changes-duration" target="_blank" rel="noopener">Interest Rate Changes and Duration</a>. The Bond Buyer, <a href="https://www.bondbuyer.com/news/puerto-rico-municipal-bonds-fall-after-trumps-debt-forgiveness-remarks" target="_blank" rel="noopener">October 4, 2017</a>. Federal Reserve, <a href="https://www.federalreserve.gov/publications/files/svb-review-20230428.pdf" target="_blank" rel="noopener">Review of the Supervision of Silicon Valley Bank</a>, page 22. Photos: U.S. Treasury (1918 bond), Yuisa Rios/FEMA (Puerto Rico), Federal Reserve Board (Eccles Building), all public domain.</p>';
 
   // ======================= scenes =======================
   const NARROW = () => W < 600;
@@ -472,7 +486,7 @@
     return 'At a 4% yield, new bonds pay the same as these bonds’ 4% coupon, so both sell for their $1,000 face value.';
   }
   // A verdict stamped on the stage, so the result lands where the player is looking (and on a phone, where the stage is).
-  function stamp(text, ok) { const el = document.createElement('div'); el.className = 'stamp ' + (ok ? 'ok' : 'no'); el.textContent = text; el.setAttribute('aria-hidden', 'true'); overlay.appendChild(el); setTimeout(() => el.remove(), RM ? 1800 : 2300); }
+  function stamp(text, ok) { $$('.stamp', overlay).forEach((x) => x.remove()); const el = document.createElement('div'); el.className = 'stamp ' + (ok ? 'ok' : 'no'); el.textContent = text; el.setAttribute('aria-hidden', 'true'); overlay.appendChild(el); setTimeout(() => el.remove(), RM ? 1800 : 2300); }
   function capEl(html) { const p = document.createElement('p'); p.className = 'cap'; p.innerHTML = html; overlay.appendChild(p); return p; }
 
   // ---- start: the beam as a toy ----
@@ -487,7 +501,7 @@
       layout(Wd, Hd) {
         const g = beamLayout(Wd, Hd, { py: NARROW() ? 0.6 : 0.6 }); backdrop(Wd, Hd, { pool: [g.px + g.armR * 0.3, g.py + 60, g.armR * 1.1], cone: [g.px + g.armR * 0.35, g.py + 40, g.armR * 0.85] });
         beam.build(svg, g.px, g.py, g.armL, g.armR, Wd, Hd);
-        overlay.innerHTML = ''; cap = capEl(startCap(4 + beam.dyT));
+        overlay.innerHTML = ''; cap = capEl(startCap(4 + beam.dyT)); if (NARROW()) cap.style.display = 'none';
         if (!NARROW() && Hd > 560) {
           const fig = document.createElement('figure'); fig.style.cssText = 'position:absolute;margin:0;right:4%;top:5%;width:min(19%,190px);transform:rotate(2deg);pointer-events:auto';
           fig.innerHTML = `<img src="img/liberty-bond.webp" alt="${esc(BOND_IMG.libertyAlt)}" style="width:100%;display:block;filter:sepia(.2) brightness(.9);box-shadow:0 22px 40px rgba(0,0,0,.6)"><figcaption style="margin-top:10px;color:var(--fog);font-size:12px;line-height:1.4;transform:rotate(-2deg)">${esc(BOND_IMG.libertyCap)}</figcaption>`;
@@ -544,7 +558,6 @@
         this._dksPre = T(dksG, dx, dy - 4, 'Sold on January 14', { 'text-anchor': 'end', class: 'disp', style: `font-size:${n ? 18 : 26}px` });
         dksSub = T(dksG, dx, dy + (n ? 16 : 22), '', { 'text-anchor': 'end', class: 'fog', style: `font-size:${n ? 10.5 : 12.5}px` });
         this._sold = null; update(dial.i);
-        const c = capEl(n ? '' : 'Treasury rates from the U.S. Treasury’s daily data. Dick’s line is an estimate (see Sources).'); c.style.textAlign = 'right';
         this.frame(0);
       },
       frame(dt) {
@@ -562,7 +575,7 @@
         lab10.setAttribute('x', X(k) + 9); lab10.setAttribute('y', l10); lab10.textContent = `10-year ${p2(a[2])}`;
         const dv = W0.dicksOn(a[0]);
         odo.g.setAttribute('opacity', dv ? 1 : 0); this._dksPre.setAttribute('opacity', dv ? 0 : 1);
-        if (!dv) dksSub.textContent = 'for 99.76% of face value';
+        if (!dv) dksSub.textContent = '';
         else { odo.set(money(dv[1]), false); dksSub.textContent = k >= T22.length - 1 ? (NARROW() ? 'per $1,000, estimated' : 'per $1,000, estimated. Annual report, Jan 28, 2023: $700.16') : 'per $1,000, estimated'; }
         const fr = W0.rangeOn(a[0]); this._fedLab.setAttribute('x', X(k) - 8); this._fedLab.setAttribute('y', Y(fr.lo) + 14); this._fedLab.setAttribute('opacity', fr.hi > 0.6 ? 1 : 0);
         odo.frame(dt);
@@ -570,42 +583,36 @@
     };
   }
 
-  // ---- step 2: read a quote ----
-  function sceneQuote(s) {
-    const t = task(s.id); let mode = S.log[s.id].done ? 'mine' : 'example', filled = S.log[s.id].done, setSw;
-    let qOdo, pOdo, fill, faceMark, gapT, capT, x0, x1, by, label, lblWho, barW = 1, barT = 0; const barSt = { x: 0, v: 0 };
-    const cur = () => (mode === 'example' ? { q: 98.25, filled: true, who: 'Worked example' } : { q: t.q, filled, who: 'Your bond' });
-    function apply(snap) {
-      const c = cur(); qOdo.set(c.q.toFixed(2), snap);
-      barT = c.q / 100;
-      pOdo.set(c.filled ? money(c.q * 10, 2) : '$???.??', snap);
-      lblWho.textContent = c.who;
-      gapT.textContent = c.filled ? (c.q < 100 ? `${money(1000 - c.q * 10, 2)} below face value` : c.q > 100 ? `${money(c.q * 10 - 1000, 2)} above face value` : 'at face value') : '';
-      describe(`${c.who}: a bond quoted at ${c.q.toFixed(2)}. ${c.filled ? 'One bond costs ' + money(c.q * 10, 2) + '.' : 'One bond costs: not filled in yet.'}`);
-      if (setSw) setSw(mode);
-    }
+  // ---- step 2: read a quote. A ruler marked in quote points above and dollars below; the player sets the price. ----
+  function sceneQuote(s, setter) {
+    const t = task(s.id); let mode = S.log[s.id].done ? 'mine' : 'example', setSw, G, R, qOdo, pOdo, mk = { x: 1000, v: 0 };
+    const LO = 880, HI = 1080;
+    const cur = () => (mode === 'example' ? { q: 98.25, v: 982.5 } : { q: t.q, v: setter.v });
+    function apply(snap) { const c = cur(); qOdo.set(c.q.toFixed(2), snap); pOdo.set(money(c.v, 2), snap); if (setSw) setSw(mode); describe(`${mode === 'example' ? 'Worked example' : 'Your bond'}: quoted at ${c.q.toFixed(2)}. Marker at ${money(c.v, 2)}.`); }
+    setter.on(() => { if (mode !== 'mine') { mode = 'mine'; } apply(); });
     const sc = {
-      show(m, user) { mode = m; apply(false); },
-      fillMine() { filled = true; apply(false); },
+      show(m) { mode = m; apply(); },
       layout(Wd, Hd) {
-        const n = Wd < 600; backdrop(Wd, Hd, { pool: [Wd / 2, Hd * 0.62, Wd * 0.5] });
-        const cx = Wd / 2; x0 = n ? 26 : Wd * 0.14; x1 = n ? Wd - 26 : Wd * 0.86;
-        lblWho = { textContent: '' };
-        T(svg, cx, Hd * 0.3 - (n ? 66 : 112), 'Dealer quote', { 'text-anchor': 'middle', class: 'fog', style: `font-size:${n ? 13 : 15}px` });
-        qOdo = Odo(svg, { size: n ? 64 : 112, anchor: 'middle', tcls: 'disp sod' }).at(cx, Hd * 0.3);
-        by = Hd * 0.5;
-        const bh = n ? 30 : 40; E('rect', { x: x0, y: by, width: x1 - x0, height: bh, rx: 3, fill: '#0E1B2D', stroke: '#4A6580' }, svg);
-        fill = E('rect', { x: x0, y: by, width: 0, height: bh, rx: 3, fill: 'url(#liquidG)' }, svg); barW = (x1 - x0) / 1.1;
-        // face value mark at 100% of a bar drawn to 110%
-        const fx = x0 + (x1 - x0) / 1.1; faceMark = E('line', { x1: fx, x2: fx, y1: by - 12, y2: by + bh + 12, stroke: '#E9EEF2', 'stroke-width': 2 }, svg);
-        T(svg, fx, by - 18, 'Face value $1,000', { 'text-anchor': 'middle', style: `font-size:${n ? 12 : 14}px` });
-        T(svg, x0, by + bh + 18, '$0', { class: 'fog', style: 'font-size:12px' });
-        gapT = T(svg, fx, by + bh + 30, '', { 'text-anchor': 'middle', class: 'fog', style: `font-size:${n ? 12 : 13.5}px` });
-        T(svg, cx, by + bh + (n ? 64 : 82), 'One bond costs', { 'text-anchor': 'middle', class: 'fog', style: `font-size:${n ? 13 : 15}px` });
-        pOdo = Odo(svg, { size: n ? 44 : 64, anchor: 'middle' }).at(cx, by + bh + (n ? 108 : 146));
-        overlay.innerHTML = ''; setSw = modeSwitch(sc, mode); apply(true);
+        const n = Wd < 600; backdrop(Wd, Hd, { pool: [Wd / 2, Hd * 0.62, Wd * 0.5] }); G = E('g', {}, svg);
+        const cx = Wd / 2, x0 = n ? 22 : Wd * 0.1, x1 = n ? Wd - 22 : Wd * 0.9, ry = Hd * 0.56; R = { x0, x1, ry, n };
+        T(svg, cx, Hd * 0.27 - (n ? 58 : 100), 'Dealer quote', { 'text-anchor': 'middle', class: 'fog', style: `font-size:${n ? 13 : 15}px` });
+        qOdo = Odo(svg, { size: n ? 58 : 100, anchor: 'middle', tcls: 'disp sod' }).at(cx, Hd * 0.27);
+        const X = (v) => x0 + (x1 - x0) * (v - LO) / (HI - LO);
+        E('rect', { x: x0, y: ry - 14, width: x1 - x0, height: 28, rx: 4, fill: '#0E1B2D', stroke: '#4A6580' }, svg);
+        for (let v = LO; v <= HI; v += 10) { const big = v % 50 === 0; E('line', { x1: X(v), x2: X(v), y1: ry - (big ? 22 : 18), y2: ry - 14, stroke: '#9DB0C2', 'stroke-width': big ? 1.5 : 0.8 }, svg); E('line', { x1: X(v), x2: X(v), y1: ry + 14, y2: ry + (big ? 22 : 18), stroke: '#9DB0C2', 'stroke-width': big ? 1.5 : 0.8 }, svg);
+          if (big && (!n || v % 100 === 0 || v === 950 || v === 1050)) { T(svg, X(v), ry - 28, String(v / 10), { 'text-anchor': 'middle', class: 'disp sod', style: `font-size:${n ? 14 : 18}px` }); T(svg, X(v), ry + 40, money(v), { 'text-anchor': 'middle', class: 'disp', style: `font-size:${n ? 14 : 18}px` }); } }
+        T(svg, x0, ry - 50, 'quote', { class: 'fog', style: 'font-size:12px' }); T(svg, x0, ry + 62, 'price of one $1,000 bond', { class: 'fog', style: 'font-size:12px' });
+        E('line', { x1: X(1000), x2: X(1000), y1: ry - 14, y2: ry + 14, stroke: '#E9EEF2', 'stroke-width': 2 }, svg);
+        this._fill = E('rect', { x: x0, y: ry - 12, height: 24, rx: 3, fill: 'url(#liquidG)', opacity: 0.85 }, svg);
+        const hd = E('g', {}, svg); this._hd = hd; E('rect', { class: 'focusring', x: -18, y: -28, width: 36, height: 56, rx: 6, fill: 'none', stroke: '#FFB447', 'stroke-width': 2 }, hd);
+        E('rect', { x: -22, y: -34, width: 44, height: 68, fill: 'transparent' }, hd); E('path', { d: 'M0 -24 L12 -12 L12 12 L0 24 L-12 12 L-12 -12 Z', fill: '#FFB447', filter: 'url(#glow)' }, hd); E('path', { d: 'M-4 -6v12M0 -6v12M4 -6v12', stroke: '#0A1524', 'stroke-width': 1.4 }, hd);
+        setter.handle(hd, (cx2) => { const r = svg.getBoundingClientRect(); return LO + (cx2 - r.left - x0) / (x1 - x0) * (HI - LO); });
+        this._X = X;
+        T(svg, cx, ry + (n ? 100 : 128), 'One bond costs', { 'text-anchor': 'middle', class: 'fog', style: `font-size:${n ? 13 : 15}px` });
+        pOdo = Odo(svg, { size: n ? 44 : 64, anchor: 'middle' }).at(cx, ry + (n ? 146 : 196));
+        mk.x = cur().v; overlay.innerHTML = ''; setSw = modeSwitch(sc, mode); apply(true);
       },
-      frame(dt) { if (!fill) return; qOdo.frame(dt); pOdo.frame(dt); spring(barSt, barT, dt, 90, 13); fill.setAttribute('width', Math.max(0, barSt.x * barW).toFixed(1)); },
+      frame(dt) { if (!this._hd) return; qOdo.frame(dt); pOdo.frame(dt); spring(mk, cur().v, dt, 110, 15); const x = this._X(mk.x); this._hd.setAttribute('transform', `translate(${x.toFixed(1)} ${R.ry})`); this._fill.setAttribute('width', Math.max(0, x - R.x0).toFixed(1)); },
     };
     return sc;
   }
@@ -666,30 +673,45 @@
     };
   }
 
-  // ---- step 5: duration ----
-  function sceneDuration(s) {
-    const t = task(s.id); const L = S.log[s.id]; let mode = L.done ? 'mine' : 'example', got = L.done ? [true, true] : [false, false], setSw;
+  // ---- step 5: duration. The bond sits at its duration; the player marks how far its price will fall, then tips the beam. ----
+  function sceneDuration(s, setter) {
+    const t = task(s.id); const L = S.log[s.id]; let mode = L.done ? 'mine' : 'example', tipped = L.done, setSw, RU, mk = { x: 0, v: 0 }, rule = { x: 0, v: 0 };
     const ex = { D: 7, dy: 0.5, A: 10000 };
-    const beam = Beam({ tokens: [{ id: 'b', d: mode === 'example' ? ex.D : t.D, label: '', sub: '' }], riseLabel: true, scale: true });
+    const beam = Beam({ tokens: [{ id: 'b', d: ex.D, label: '', sub: '' }], riseLabel: true, scale: true });
+    const cur = () => (mode === 'example' ? Object.assign({ who: 'Worked example', mark: ex.D * ex.dy, shown: true }, ex) : { who: 'Your bond', D: t.D, dy: t.dy, A: t.A, mark: setter.v, shown: tipped });
     function apply() {
-      const c = mode === 'example' ? Object.assign({ who: 'Worked example' }, ex, { ok: [true, true] }) : { who: 'Your numbers', D: t.D, dy: t.dy, A: t.A, ok: got };
-      beam.tokens[0].d = c.D; const tk = beam.tokenAt('b'); if (tk) { tk.c.remove(); tk.c = cert(tk.g, NARROW() ? 70 : 96, NARROW() ? 40 : 50, mm(c.A), 'duration ' + c.D); }
-      beam.setRise(mode === 'example' || c.ok[0] ? c.dy : 0);
-      beam.anno('b', [{ text: c.ok[0] ? `${c.D} × ${fix(c.dy)} = ${fix(c.D * c.dy, 2)}%` : `${c.D} × ${fix(c.dy)} = ?%`, cls: 'coral', big: true }, { text: c.ok[1] ? `${mm(c.A * c.D * c.dy / 100)} lost` : '$? lost', cls: '' }]);
+      const c = cur(); beam.tokens[0].d = c.D; const tk = beam.tokenAt('b'); if (tk) { tk.c.remove(); tk.c = cert(tk.g, NARROW() ? 74 : 104, NARROW() ? 40 : 52, mm(c.A), 'duration ' + c.D); }
+      beam.setRise(c.shown ? c.dy : 0);
+      beam.anno('b', [{ text: c.shown ? `${c.D} × ${fix(c.dy)} = ${fix(c.D * c.dy)}%` : `${c.D} × ${fix(c.dy)} = ?`, cls: 'coral', big: true }]);
       if (setSw) setSw(mode);
-      describe(`${c.who}: a bond with duration ${c.D} sits ${c.D} marks from the pivot. Rates rise ${fix(c.dy)} points, so its price falls about ${c.ok[0] ? fix(c.D * c.dy) + '%' : 'an unknown percent'}.`);
+      describe(`${c.who}: a bond with duration ${c.D}; rates up ${fix(c.dy)} points. Your mark: price falls ${fix(c.mark)}%.${c.shown ? ` The beam shows ${fix(c.D * c.dy)}%.` : ''}`);
     }
+    setter.on(() => { if (mode !== 'mine') mode = 'mine'; apply(); });
     const sc = {
-      show(m) { mode = m; apply.call(sc); },
-      rows(rr) { if (rr[0] && rr[0].ok) got[0] = true; if (rr[1] && rr[1].ok) got[1] = true; if (mode !== 'mine') mode = 'mine'; apply.call(sc); },
+      show(m) { mode = m; apply(); },
+      tip() { tipped = true; mode = 'mine'; apply(); },
       layout(Wd, Hd) {
-        const g = beamLayout(Wd, Hd, { py: 0.5 }); backdrop(Wd, Hd, { pool: [g.px + g.armR * 0.3, g.py + 60, g.armR * 1.1], cone: [g.px + g.armR * 0.35, g.py + 40, g.armR * 0.85] });
-        beam.build(svg, g.px, g.py, g.armL, g.armR, Wd, Hd);
-        T(svg, g.px + g.armR * 0.5, Hd - (NARROW() ? 26 : 40), 'A bond’s distance from the pivot is its duration.', { 'text-anchor': 'middle', class: 'fog', style: `font-size:${NARROW() ? 12.5 : 15}px` });
-        this._who = T(svg, Wd - 16, 26, '', { 'text-anchor': 'end', class: 'fog', style: 'font-size:13px' });
-        overlay.innerHTML = ''; setSw = modeSwitch(sc, mode); apply.call(sc);
+        const n = Wd < 600, g = beamLayout(Wd, Hd, { py: 0.46 });
+        const gg = { px: g.px - (n ? 10 : 30), py: g.py, armL: g.armL * 0.7, armR: Math.min(g.armR, Wd - g.px - (n ? 96 : 150)) };
+        backdrop(Wd, Hd, { pool: [gg.px + gg.armR * 0.3, gg.py + 60, gg.armR * 1.1], cone: [gg.px + gg.armR * 0.35, gg.py + 40, gg.armR * 0.85] });
+        beam.build(svg, gg.px, gg.py, gg.armL, gg.armR, Wd, Hd);
+        // the price ruler: 0% at the top to 20% at the bottom
+        const x = Wd - (n ? 70 : 118), y0 = n ? 46 : 70, y1 = Hd - (n ? 40 : 70); RU = { x, y0, y1, Y: (p) => y0 + (y1 - y0) * p / 20 };
+        T(svg, x, y0 - (n ? 22 : 30), 'price falls', { 'text-anchor': 'middle', class: 'fog', style: `font-size:${n ? 11 : 13}px` });
+        E('rect', { x: x - 8, y: y0, width: 16, height: y1 - y0, rx: 8, fill: '#0E1B2D', stroke: '#4A6580' }, svg);
+        for (let p = 0; p <= 20; p++) { const big = p % 5 === 0; E('line', { x1: x - (big ? 16 : 12), x2: x - 8, y1: RU.Y(p), y2: RU.Y(p), stroke: '#9DB0C2', 'stroke-width': big ? 1.4 : 0.8 }, svg); if (big) T(svg, x - 20, RU.Y(p) + 4, p + '%', { 'text-anchor': 'end', class: 'fog', style: `font-size:${n ? 10.5 : 12}px` }); }
+        this._rule = E('g', {}, svg); E('path', { d: 'M10 0 l12 -7 v14 z', fill: '#FF8A7A' }, this._rule); this._ruleT = T(this._rule, 26, 5, '', { class: 'disp coral', style: `font-size:${n ? 14 : 18}px` });
+        const hd = E('g', {}, svg); this._hd = hd; E('rect', { class: 'focusring', x: -40, y: -14, width: 56, height: 28, rx: 6, fill: 'none', stroke: '#FFB447', 'stroke-width': 2 }, hd);
+        E('rect', { x: -60, y: -18, width: 76, height: 36, fill: 'transparent' }, hd); E('path', { d: 'M-10 0 l-14 -9 v18 z', fill: '#FFB447', filter: 'url(#glow)' }, hd); E('rect', { x: -9, y: -2, width: 18, height: 4, fill: '#FFB447' }, hd);
+        this._hdT = T(hd, -30, -14, '', { 'text-anchor': 'end', class: 'disp sod', style: `font-size:${n ? 15 : 20}px` });
+        setter.handle(hd, (cx2, cy2) => { const r = svg.getBoundingClientRect(); return (cy2 - r.top - y0) / (y1 - y0) * 20; }, true);
+        mk.x = cur().mark; rule.x = 0; overlay.innerHTML = ''; setSw = modeSwitch(sc, mode); apply();
       },
-      frame(dt) { beam.frame(dt); },
+      frame(dt) {
+        beam.frame(dt); if (!this._hd) return; const c = cur();
+        spring(mk, c.mark, dt, 120, 16); this._hd.setAttribute('transform', `translate(${RU.x} ${RU.Y(mk.x).toFixed(1)})`); this._hdT.textContent = fix(c.mark, 1) + '%';
+        spring(rule, c.shown ? c.D * c.dy : 0, dt, 50, 11); this._rule.setAttribute('transform', `translate(${RU.x} ${RU.Y(rule.x).toFixed(1)})`); this._rule.setAttribute('opacity', c.shown ? 1 : 0); this._ruleT.textContent = 'beam: ' + fix(rule.x, 1) + '%';
+      },
     };
     return sc;
   }
@@ -714,94 +736,94 @@
     };
   }
 
-  // ---- step 7: spread ----
-  function sceneSpread(s) {
-    const t = task(s.id), L = S.log[s.id]; let mode = L.done ? 'mine' : 'example', got = L.done ? [true, true] : [false, false], setSw;
-    let G, Y, geo, st = { corp: { x: 0, v: 0 }, tsy: { x: 0, v: 0 } }, tgt = { corp: 6.1, tsy: 4.35 }, labs = {};
-    function apply() {
-      const c = mode === 'example' ? { corp: 6.10, tsy: 4.35, ok: [true, true], who: 'Worked example' } : { corp: t.corp, tsy: t.tsy, ok: got, who: 'Your numbers' };
-      tgt = { corp: c.corp, tsy: c.tsy }; this._c = c; if (setSw) setSw(mode); 
-      describe(`${c.who}: the company’s 10-year bond yields ${p2(c.corp)} and the 10-year Treasury ${p2(c.tsy)}. Spread ${c.ok[0] ? fix(c.corp - c.tsy) + ' points' : 'not filled in yet'}${c.ok[1] ? ', ' + Math.round((c.corp - c.tsy) * 100) + ' basis points' : ''}.`);
-    }
+  // ---- step 7: spread. Two yield lines; the player drags a bracket up from the Treasury line to measure the gap. ----
+  function sceneSpread(s, setter) {
+    const t = task(s.id), L = S.log[s.id]; let mode = L.done ? 'mine' : 'example', setSw, Y, geo, br = { x: 0, v: 0 };
+    const cur = () => (mode === 'example' ? { corp: 6.10, tsy: 4.35, bps: 175 } : { corp: t.corp, tsy: t.tsy, bps: setter.v });
+    function apply() { const c = cur(); if (setSw) setSw(mode); describe(`${mode === 'example' ? 'Worked example' : 'Your numbers'}: company ${p2(c.corp)}, Treasury ${p2(c.tsy)}. Bracket at ${c.bps} basis points.`); }
+    setter.on(() => { if (mode !== 'mine') mode = 'mine'; apply(); });
     const sc = {
-      show(m) { mode = m; apply.call(sc); },
-      rows(rr) { if (rr[0] && rr[0].ok) got[0] = true; if (rr[1] && rr[1].ok) got[1] = true; mode = 'mine'; apply.call(sc); },
+      show(m) { mode = m; apply(); },
       layout(Wd, Hd) {
         const n = Wd < 600; backdrop(Wd, Hd);
-        geo = { x0: n ? 50 : Wd * 0.12, x1: n ? Wd - 20 : Wd * 0.7, y0: n ? 50 : 70, y1: Hd - (n ? 40 : 70), n };
+        geo = { x0: n ? 40 : Wd * 0.1, x1: n ? Wd - 120 : Wd * 0.66, y0: n ? 56 : 70, y1: Hd - (n ? 30 : 60), n };
         Y = (v) => geo.y1 - (geo.y1 - geo.y0) * (v - 3) / 5;
-        G = E('g', {}, svg);
-        for (let v = 3; v <= 8; v++) { E('line', { x1: geo.x0, x2: geo.x1, y1: Y(v), y2: Y(v), stroke: '#1E3149' }, G); T(G, geo.x0 - 8, Y(v) + 4, v + '%', { 'text-anchor': 'end', class: 'fog', style: 'font-size:11px' }); }
-        labs.who = T(svg, Wd - 16, 26, '', { 'text-anchor': 'end', class: 'fog', style: 'font-size:13px' });
+        for (let v = 3; v <= 8; v++) { E('line', { x1: geo.x0, x2: geo.x1, y1: Y(v), y2: Y(v), stroke: '#1E3149' }, svg); T(svg, geo.x0 - 8, Y(v) + 4, v + '%', { 'text-anchor': 'end', class: 'fog', style: 'font-size:11px' }); }
         this._dyn = E('g', {}, svg);
-        st.corp.x = tgt.corp; st.tsy.x = tgt.tsy;
-        overlay.innerHTML = ''; setSw = modeSwitch(sc, mode); apply.call(sc); this.frame(0);
+        const hd = E('g', {}, svg); this._hd = hd; E('rect', { class: 'focusring', x: -26, y: -14, width: 52, height: 28, rx: 6, fill: 'none', stroke: '#FFB447', 'stroke-width': 2 }, hd);
+        E('rect', { x: -34, y: -20, width: 68, height: 40, fill: 'transparent' }, hd); E('rect', { x: -20, y: -5, width: 40, height: 10, rx: 5, fill: '#FFB447', filter: 'url(#glow)' }, hd);
+        setter.handle(hd, (cx2, cy2) => { const r = svg.getBoundingClientRect(); const v = 3 + (geo.y1 - (cy2 - r.top)) / (geo.y1 - geo.y0) * 5; return (v - cur().tsy) * 100; });
+        br.x = cur().bps; overlay.innerHTML = ''; setSw = modeSwitch(sc, mode); apply(); this.frame(0);
       },
       frame(dt) {
-        if (!this._dyn) return; spring(st.corp, tgt.corp, dt, 90, 14); spring(st.tsy, tgt.tsy, dt, 90, 14);
-        const g = this._dyn; g.innerHTML = ''; const c = this._c, n = geo.n; const yc = Y(st.corp.x), yt = Y(st.tsy.x), bx = n ? geo.x1 - 92 : geo.x1 - 20;
-        E('rect', { x: geo.x0, y: yc, width: bx - geo.x0, height: Math.max(0, yt - yc), fill: 'url(#hatchP)' }, g);
+        if (!this._dyn) return; const c = cur(); spring(br, c.bps, dt, 110, 15);
+        const g = this._dyn; g.innerHTML = ''; const n = geo.n; const yc = Y(c.corp), yt = Y(c.tsy), bx = n ? geo.x1 - 14 : geo.x1 - 30, ytop = Y(c.tsy + br.x / 100);
+        E('rect', { x: geo.x0, y: Math.min(ytop, yt), width: bx - geo.x0, height: Math.abs(yt - ytop), fill: 'url(#hatchP)' }, g);
         E('line', { x1: geo.x0, x2: geo.x1, y1: yc, y2: yc, stroke: '#FFB447', 'stroke-width': 3 }, g);
         E('line', { x1: geo.x0, x2: geo.x1, y1: yt, y2: yt, stroke: '#E9EEF2', 'stroke-width': 3 }, g);
-        T(g, geo.x0 + 8, yc - 10, `Company’s 10-year bond  ${p2(c.corp)}`, { class: 'disp sod', style: `font-size:${n ? 15 : 20}px` });
-        T(g, geo.x0 + 8, yt + (n ? 20 : 26), `10-year Treasury  ${p2(c.tsy)}`, { class: 'disp', style: `font-size:${n ? 15 : 20}px` });
-        // the bracket, ruled every 25 basis points
-        E('line', { x1: bx, x2: bx, y1: yc, y2: yt, stroke: '#E9EEF2', 'stroke-width': 1.5 }, g);
-        const steps = Math.round((st.tsy.x - st.corp.x) / -0.25);
-        for (let k = 0; k <= Math.abs(steps) + 1; k++) { const v = st.tsy.x + k * 0.25; if (v > st.corp.x + 1e-6) break; const yy = Y(v); E('line', { x1: bx - (k % 4 ? 5 : 10), x2: bx + (k % 4 ? 5 : 10), y1: yy, y2: yy, stroke: '#E9EEF2', 'stroke-width': k % 4 ? 1 : 1.6 }, g); }
-        const my = (yc + yt) / 2, tx = bx + (n ? 10 : 20);
-        T(g, tx, my - 6, c.ok[0] ? `${fix(c.corp - c.tsy)} points` : '? points', { class: 'disp', style: `font-size:${n ? 17 : 26}px` });
-        T(g, tx, my + (n ? 13 : 20), c.ok[1] ? `${Math.round((c.corp - c.tsy) * 100)} basis points` : '? basis points', { class: 'disp sod', style: `font-size:${n ? 14 : 19}px` });
-        T(g, tx, my + (n ? 28 : 40), 'each tick: 25 basis points', { class: 'fog', style: `font-size:${n ? 10 : 12}px` });
+        T(g, geo.x0 + 8, yc - 10, `Company’s 10-year bond ${p2(c.corp)}`, { class: 'disp sod', style: `font-size:${n ? 15 : 20}px` });
+        T(g, geo.x0 + 8, yt + (n ? 20 : 26), `10-year Treasury ${p2(c.tsy)}`, { class: 'disp', style: `font-size:${n ? 15 : 20}px` });
+        E('line', { x1: bx, x2: bx, y1: ytop, y2: yt, stroke: '#E9EEF2', 'stroke-width': 1.5 }, g);
+        for (let k = 0; k * 25 <= br.x + 0.01; k++) { const yy = Y(c.tsy + k * 0.25); E('line', { x1: bx - (k % 4 ? 5 : 10), x2: bx + (k % 4 ? 5 : 10), y1: yy, y2: yy, stroke: '#E9EEF2', 'stroke-width': k % 4 ? 1 : 1.6 }, g); }
+        const tx = bx + (n ? 16 : 30), my = (ytop + yt) / 2;
+        T(g, tx, my - 4, `${Math.round(br.x)} basis points`, { class: 'disp sod', style: `font-size:${n ? 16 : 24}px` });
+        T(g, tx, my + (n ? 15 : 22), `= ${fix(br.x / 100)} points`, { class: 'disp', style: `font-size:${n ? 13 : 18}px` });
+        this._hd.setAttribute('transform', `translate(${bx} ${ytop.toFixed(1)})`);
       },
     };
     return sc;
   }
 
-  // ---- step 8: Dragovia ----
+  // ---- step 8: Dragovia. A press conference: the news, the minister's promise, the lenders walking out, then the prices. ----
+  const DRAG_NEWS = ['Dragovia’s president has embezzled tax money', 'Dragovia admits it hid $4 billion of debt', 'Dragovia’s central bank is running out of dollars'];
+  const dragNews = () => DRAG_NEWS[h.fnv1a('news|' + S.code) % DRAG_NEWS.length];
   function sceneDragovia(s) {
-    const L = S.log[s.id], DG = W0.DRAGOVIA; let after = L.done, figs = [], t0 = 0, headlineY = { x: L.done ? 1 : 0, v: 0 }, geo, dOdo, tOdo, dyOdo, spreadG, odos = [];
-    const yAfter = W0.yieldAt(DG.after, DG.coupon, DG.years) * 100;
-    let shown = { x: after ? 1 : 0, v: 0 };
+    const L = S.log[s.id], DG = W0.DRAGOVIA; let after = L.done, figs = [], t0 = 0, hl = { x: L.done ? 1 : 0, v: 0 }, geo, dOdo, dyOdo, spreadG, odos = [];
+    const yAfter = W0.yieldAt(DG.after, DG.coupon, DG.years) * 100; let shown = { x: after ? 1 : 0, v: 0 };
     const sc = {
-      answered(ok) { if (ok) { after = true; dOdo.set(money(DG.after)); dyOdo.set(p2(yAfter)); Sound.thud(); describe(`Dragovia’s price falls to ${money(DG.after)} and its yield rises to about ${p2(yAfter)}. The Treasury stays at $1,000 and 4.00%. The spread between them opens.`); } },
+      answered(ok) { if (ok && !after) { after = true; dOdo.set(money(DG.after)); dyOdo.set(p2(yAfter)); Sound.thud(); describe(`Dragovia’s price falls to ${money(DG.after)} and its yield rises to about ${p2(yAfter)}. The Treasury stays at $1,000 and 4.00%. The spread opens.`); } },
       layout(Wd, Hd) {
         const n = Wd < 600; backdrop(Wd, Hd); figs = []; odos = [];
-        geo = { n, Wd, Hd, xs: [Wd * (n ? 0.27 : 0.25), Wd * (n ? 0.73 : 0.62)], cy: Hd * (n ? 0.42 : 0.4) };
+        geo = { n, Wd, Hd, px: Wd * (n ? 0.27 : 0.27), cx: Wd * (n ? 0.74 : 0.74), top: n ? 64 : 92, chartTop: Hd * (n ? 0.74 : 0.75) };
         // headline
-        const hl = E('g', {}, svg); this._hl = hl; const hw = Math.min(Wd - 32, 640), hx = (Wd - hw) / 2;
-        E('rect', { x: hx, y: 0, width: hw, height: n ? 64 : 70, fill: '#E9EEF2', rx: 2 }, hl);
-        E('rect', { x: hx, y: 0, width: 6, height: n ? 64 : 70, fill: '#FF8A7A' }, hl);
-        T(hl, hx + 18, n ? 22 : 26, 'News', { class: 'night', style: `font-size:${n ? 11 : 12}px;font-weight:600` });
-        T(hl, hx + 18, n ? 46 : 54, n ? 'Dragovia’s president embezzled tax money' : 'Journalist: Dragovia’s president has embezzled tax money', { class: 'disp night', style: `font-size:${n ? 17 : 26}px;font-weight:800` });
-        this._hlH = n ? 64 : 70;
-        // two bonds
-        const cw = n ? 120 : 196, ch = n ? 70 : 112;
-        [[0, 'U.S. Treasury', '4% coupon', 1000, 4], [1, 'Dragovia', '6% coupon', after ? DG.after : 1000, after ? yAfter : 6]].forEach(([k, a, b, pr, y]) => {
-          const g = E('g', { transform: `translate(${geo.xs[k]} ${geo.cy + ch / 2})` }, svg); cert(g, cw, ch, a, b, {});
-          const po = Odo(svg, { size: n ? 24 : 34, anchor: 'middle', value: money(pr) }).at(geo.xs[k], geo.cy - ch / 2 - (n ? 26 : 36));
-          const yo = Odo(svg, { size: n ? 15 : 19, anchor: 'middle', value: p2(y), tcls: 'disp fog' }).at(geo.xs[k], geo.cy - ch / 2 - (n ? 8 : 12));
-          T(svg, geo.xs[k] - (n ? 44 : 64), geo.cy - ch / 2 - (n ? 8 : 12), 'yield', { 'text-anchor': 'end', class: 'fog', style: 'font-size:11px' });
-          odos.push(po, yo); if (k) { dOdo = po; dyOdo = yo; } else tOdo = po;
-        });
-        // lenders (simple figures) beside Dragovia; they leave once the headline lands
-        const nF = n ? 6 : 8; for (let k = 0; k < nF; k++) {
-          const g = E('g', {}, svg); const fx = geo.xs[1] + (k - (nF - 1) / 2) * (n ? 17 : 22), fy = geo.cy + ch / 2 + (n ? 30 : 40);
-          E('circle', { cx: 0, cy: -22, r: 5, fill: '#9DB0C2' }, g); E('path', { d: 'M-7 0 Q-7 -15 0 -15 Q7 -15 7 0 Z', fill: '#9DB0C2' }, g);
-          figs.push({ g, x: fx, y: fy, dir: k % 2 ? 1 : -1, delay: 0.5 + k * 0.12, gone: L.done });
+        const hlG = E('g', {}, svg); this._hl = hlG; const hw = Math.min(Wd - 24, 660), hx = (Wd - hw) / 2, hh = n ? 50 : 62;
+        E('rect', { x: hx, y: 0, width: hw, height: hh, fill: '#E9EEF2', rx: 2 }, hlG); E('rect', { x: hx, y: 0, width: 6, height: hh, fill: '#FF8A7A' }, hlG);
+        T(hlG, hx + 16, n ? 18 : 22, 'Breaking news', { class: 'night', style: `font-size:${n ? 10.5 : 12}px;font-weight:600` });
+        T(hlG, hx + 16, n ? 40 : 50, dragNews(), { class: 'disp night', style: `font-size:${n ? 16 : 25}px;font-weight:800` }); this._hlH = hh;
+        // the minister, live on television
+        const tvW = n ? 150 : 300, tvH = n ? 118 : 222, tvX = geo.px - tvW / 2, tvY = geo.top + (n ? 4 : 10), cid = nid('tv');
+        E('clipPath', { id: cid }, defs).innerHTML = `<rect x="${tvX}" y="${tvY}" width="${tvW}" height="${tvH}" rx="8"/>`;
+        E('rect', { x: tvX - 5, y: tvY - 5, width: tvW + 10, height: tvH + 10, rx: 11, fill: '#16263A', stroke: '#4A6580' }, svg);
+        const tv = E('g', { 'clip-path': `url(#${cid})` }, svg);
+        E('rect', { x: tvX, y: tvY, width: tvW, height: tvH, fill: '#1D3149' }, tv);
+        for (let k = 0; k < 3; k++) E('rect', { x: tvX, y: tvY + k * tvH / 9, width: tvW, height: tvH / 18, fill: k === 1 ? '#FF8A7A' : '#2B425C', opacity: 0.35 }, tv);
+        const bsc = tvH * 0.95 / 64, mG = E('g', { transform: `translate(${geo.px - 32 * bsc} ${tvY + tvH - 64 * bsc + tvH * 0.04}) scale(${bsc})` }, tv); mG.innerHTML = portraitBody('minister');
+        for (const dx of [-0.16, 0, 0.16]) { E('line', { x1: geo.px + dx * tvW, y1: tvY + tvH, x2: geo.px + dx * tvW * 0.6, y2: tvY + tvH * 0.72, stroke: '#0A1524', 'stroke-width': n ? 3 : 5 }, tv); E('circle', { cx: geo.px + dx * tvW * 0.6, cy: tvY + tvH * 0.72, r: n ? 4 : 7, fill: '#0A1524' }, tv); }
+        E('rect', { x: tvX, y: tvY + tvH - (n ? 22 : 34), width: tvW, height: n ? 22 : 34, fill: '#0A1524', opacity: 0.85 }, tv);
+        T(tv, tvX + 8, tvY + tvH - (n ? 8 : 12), 'Finance minister: “We will pay.”', { class: 'disp', style: `font-size:${n ? 11 : 17}px` });
+        E('rect', { x: tvX + 8, y: tvY + 8, width: n ? 30 : 40, height: n ? 14 : 18, rx: 3, fill: '#FF8A7A' }, tv); T(tv, tvX + (n ? 23 : 28), tvY + (n ? 18.5 : 21.5), 'LIVE', { 'text-anchor': 'middle', class: 'night disp', style: `font-size:${n ? 10 : 13}px` });
+        // lenders in the room, who leave once the news lands
+        const nF = n ? 5 : 8, fy = geo.chartTop - (n ? 10 : 16); for (let k = 0; k < nF; k++) {
+          const g = E('g', {}, svg); E('circle', { cx: 0, cy: -22, r: 5, fill: '#9DB0C2' }, g); E('path', { d: 'M-7 0 Q-7 -15 0 -15 Q7 -15 7 0 Z', fill: '#9DB0C2' }, g);
+          figs.push({ g, x: geo.px + (k - (nF - 1) / 2) * (n ? 18 : 26), y: fy, dir: k % 2 ? 1 : -1, delay: 0.9 + k * 0.12, gone: L.done });
         }
-        this._lend = T(svg, geo.xs[1], geo.cy + ch / 2 + (n ? 48 : 62), 'Lenders', { 'text-anchor': 'middle', class: 'fog', style: 'font-size:12px' });
-        // yields over time: the spread opens after the news
-        const gy = { x0: n ? 30 : Wd * 0.1, x1: n ? Wd - 20 : Wd * 0.9, y0: Hd * (n ? 0.74 : 0.74), y1: Hd - (n ? 22 : 34) };
-        this._gy = gy; spreadG = E('g', {}, svg);
-        describe(after ? `Dragovia’s price has fallen to ${money(DG.after)} and its yield risen to about ${p2(yAfter)}; the Treasury has not moved.` : 'A headline about Dragovia. The lenders beside Dragovia’s bond walk away. The U.S. Treasury bond beside it sits at $1,000.');
+        // the two bonds' prices
+        const cw = n ? 104 : 168, ch = n ? 46 : 70;
+        [[0, 'U.S. Treasury', '4% coupon', 1000, 4, geo.top + (n ? 4 : 24)], [1, 'Dragovia', '6% coupon', after ? DG.after : 1000, after ? yAfter : 6, geo.top + (n ? 96 : 176)]].forEach(([k, a, b, pr, y, ty]) => {
+          const g = E('g', { transform: `translate(${geo.cx} ${ty + ch + (n ? 26 : 38)})` }, svg); cert(g, cw, ch, a, b, {});
+          const po = Odo(svg, { size: n ? 20 : 30, anchor: 'end', value: money(pr) }).at(geo.cx + cw / 2, ty + (n ? 18 : 26));
+          const yo = Odo(svg, { size: n ? 14 : 18, anchor: 'start', value: p2(y), tcls: 'disp fog' }).at(geo.cx - cw / 2, ty + (n ? 18 : 26));
+          odos.push(po, yo); if (k) { dOdo = po; dyOdo = yo; }
+        });
+        T(svg, geo.cx - cw / 2, geo.top - (n ? 4 : 2), 'yield', { class: 'fog', style: 'font-size:11px' }); T(svg, geo.cx + cw / 2, geo.top - (n ? 4 : 2), 'price', { 'text-anchor': 'end', class: 'fog', style: 'font-size:11px' });
+        this._gy = { x0: n ? 30 : Wd * 0.08, x1: n ? Wd - 20 : Wd * 0.92, y0: geo.chartTop + 6, y1: Hd - (n ? 14 : 26) }; spreadG = E('g', {}, svg);
+        describe(after ? `Dragovia’s price has fallen to ${money(DG.after)} and its yield risen to about ${p2(yAfter)}; the Treasury has not moved.` : `Breaking news: ${dragNews()}. Dragovia’s finance minister promises to pay. The lenders in the room walk out. Both bonds sit at $1,000.`);
         t0 = 0; this.frame(0);
       },
       frame(dt) {
         if (!spreadG) return; t0 += dt; odos.forEach((o) => o.frame(dt));
-        spring(headlineY, 1, dt, 70, 12); const hy = -this._hlH + (this._hlH + (geo.n ? 8 : 14)) * Math.min(1, headlineY.x); this._hl.setAttribute('transform', `translate(0 ${hy.toFixed(1)})`);
-        figs.forEach((f) => { let off = 0, op = 1; if (f.gone || RM && t0 > f.delay) { off = 999; op = 0; } else if (t0 > f.delay) { const u = t0 - f.delay; off = 160 * u * u; op = Math.max(0, 1 - u / 1.3); if (op === 0) f.gone = true; } f.g.setAttribute('transform', `translate(${f.x + f.dir * off} ${f.y + Math.sin(t0 * 14 + f.x) * (off ? 1.5 : 0)})`); f.g.setAttribute('opacity', op); });
-        this._lend.setAttribute('opacity', Math.max(0, 1 - Math.max(0, t0 - 0.6) / 1.2));
+        spring(hl, 1, dt, 70, 12); this._hl.setAttribute('transform', `translate(0 ${(-this._hlH + (this._hlH + 8) * Math.min(1, hl.x)).toFixed(1)})`);
+        figs.forEach((f) => { let off = 0, op = 1; if (f.gone || (RM && t0 > f.delay)) { off = 999; op = 0; } else if (t0 > f.delay) { const u = t0 - f.delay; off = 160 * u * u; op = Math.max(0, 1 - u / 1.3); if (op === 0) f.gone = true; } f.g.setAttribute('transform', `translate(${f.x + f.dir * off} ${f.y + Math.sin(t0 * 14 + f.x) * (off ? 1.5 : 0)})`); f.g.setAttribute('opacity', op); });
         spring(shown, after ? 1 : 0, dt, 40, 10);
         const gy = this._gy, Yv = (v) => gy.y1 - (gy.y1 - gy.y0) * (v - 3) / 7, X = (u) => gy.x0 + (gy.x1 - gy.x0) * u, g = spreadG; g.innerHTML = '';
         const dragY = (u) => 6 + (u > 0.5 ? (yAfter - 6) * shown.x * Math.min(1, (u - 0.5) * 5) : 0);
@@ -809,11 +831,10 @@
         for (let k = 40; k >= 0; k--) area += 'L' + X(k / 40).toFixed(1) + ' ' + Yv(4).toFixed(1);
         E('path', { d: dd + area + 'Z', fill: 'url(#hatchP)' }, g);
         E('path', { d: td, fill: 'none', stroke: '#E9EEF2', 'stroke-width': 2 }, g); E('path', { d: dd, fill: 'none', stroke: '#FFB447', 'stroke-width': 2.4 }, g);
-        T(g, gy.x0, gy.y0 - 6, 'Yields over time', { class: 'fog', style: 'font-size:11.5px' });
-        T(g, X(1) + 2, Yv(4) + 14, 'Treasury', { 'text-anchor': 'end', style: 'font-size:11px' });
-        T(g, X(1) + 2, Yv(dragY(1)) - 6, 'Dragovia', { 'text-anchor': 'end', class: 'sod', style: 'font-size:11px' });
-        const sp = dragY(1) - 4; T(g, X(0.78), (Yv(4) + Yv(dragY(1))) / 2 + 4, `spread ${fix(sp, 1)} points`, { 'text-anchor': 'middle', style: `font-size:${geo.n ? 11 : 13}px` });
-        E('line', { x1: X(0.5), x2: X(0.5), y1: gy.y0, y2: gy.y1, stroke: '#FF8A7A', 'stroke-dasharray': '2 3' }, g); T(g, X(0.5) + 4, gy.y0 + 8, 'the news', { class: 'coral', style: 'font-size:10.5px' });
+        T(g, gy.x0, gy.y0 - 4, 'Yields', { class: 'fog', style: 'font-size:11px' });
+        T(g, X(1), Yv(4) + 13, 'Treasury', { 'text-anchor': 'end', style: 'font-size:11px' });
+        T(g, X(1), Yv(dragY(1)) - 5, 'Dragovia', { 'text-anchor': 'end', class: 'sod', style: 'font-size:11px' });
+        if (shown.x > 0.05) T(g, X(0.76), (Yv(4) + Yv(dragY(1))) / 2 + 4, `spread ${fix(dragY(1) - 4, 1)} points`, { 'text-anchor': 'middle', style: `font-size:${geo.n ? 11 : 13}px` });
       },
     };
     return sc;
@@ -823,7 +844,7 @@
   function scenePR(s) {
     const L = S.log[s.id]; let mode = L.done ? 'mine' : 'example', got = L.done ? [true, true] : [false, false], setSw, G, geo, bars = { a: { x: 0, v: 0 }, b: { x: 0, v: 0 } }, tgt = { a: 80, b: 60 };
     function apply() {
-      const c = mode === 'example' ? { a: 80, b: 60, ok: [true, true], who: 'Worked example', la: 'Before', lb: 'After' } : { a: 44, b: 30, ok: got, who: 'Puerto Rico’s bond, cents on the dollar', la: 'October 3', lb: 'October 4, at its low' };
+      const c = mode === 'example' ? { a: 80, b: 60, ok: [true, true], who: 'Worked example', la: 'Before', lb: 'After' } : { a: 44, b: 30, ok: [true, got[1]], who: 'Puerto Rico’s bond, cents on the dollar', la: 'October 3', lb: 'October 4, at its low' };
       tgt = { a: c.a, b: c.b }; this._c = c; if (setSw) setSw(mode);
       describe(`${c.who}: ${c.a} cents, then ${c.b}. ${c.ok[0] ? `A fall of ${c.a - c.b} cents` : 'The fall is not filled in yet'}${c.ok[1] ? `, about ${fix(100 * (c.a - c.b) / c.a, 1)}%` : ''}.`);
     }
@@ -872,8 +893,8 @@
       valueText: (i) => `Rates up ${fix(i * 0.25)} points`, onChange: (i) => { beam.setRise(i * 0.25); hooks.onDial(i * 0.25); } });
     const beam = Beam({ tokens: [{ id: 'blk', d: t.D, label: `$${t.A} billion`, sub: `duration ${t.D}`, kind: 'block' }], riseLabel: true, scale: true });
     let G, gauge = { lvl: { x: 1, v: 0 } }, geo, valOdo, lossOdo;
-    let armed = null; // the loss the student typed, in billions: the mark the gauge is tested against
-    function cur() { return mode === 'example' ? Object.assign({ who: 'Worked example' }, ex, { r: ex.dy, mark: ex.A * ex.D * ex.dy / 100 }) : { who: 'Your bank', A: t.A, D: t.D, dy: t.dy, r: dial.i * 0.25, mark: ready ? (L.done ? t.answer : armed) : null }; }
+    let armed = null, guessing = false, gset = null; // the loss the player typed or dragged, in billions: the mark the gauge is tested against
+    function cur() { return mode === 'example' ? Object.assign({ who: 'Worked example' }, ex, { r: ex.dy, mark: ex.A * ex.D * ex.dy / 100 }) : { who: 'Your bank', A: t.A, D: t.D, dy: t.dy, r: dial.i * 0.25, mark: ready ? (L.done ? t.answer : armed) : (guessing ? armed : null) }; }
     function apply() {
       const c = cur(); beam.tokens[0].d = c.D; const tk = beam.tokenAt('blk'); if (tk) { tk.c.remove(); tk.c = cert(tk.g, tk.w, tk.hh, `$${c.A} billion`, `duration ${c.D}`, { stack: true }); }
       beam.setRise(c.r); dial.enable(mode === 'mine' && ready);
@@ -885,6 +906,8 @@
       unlock() { ready = true; mode = 'mine'; landed = false; dial.set(0); apply.call(sc); dial.focus(); if (NARROW()) stage.scrollIntoView({ behavior: RM ? 'auto' : 'smooth' }); },
       arm(v) { armed = v; ready = true; mode = 'mine'; landed = false; dial.set(0); apply.call(sc); if (NARROW()) setTimeout(() => stage.scrollIntoView({ behavior: RM ? 'auto' : 'smooth' }), 900); },
       get landed() { return landed; },
+      guess(st) { guessing = true; gset = st; armed = st.v; mode = 'mine'; st.on((v) => { armed = v; }); },
+      lock() { guessing = false; ready = true; mode = 'mine'; landed = false; dial.set(0); apply.call(sc); if (this._gh) this._gh.remove(); this._gh = null; dial.focus(); if (NARROW()) stage.scrollIntoView({ behavior: RM ? 'auto' : 'smooth' }); },
       layout(Wd, Hd) {
         const n = Wd < 600; backdrop(Wd, Hd);
         const g = { px: Wd * (n ? 0.32 : 0.3), py: Hd * (n ? 0.4 : 0.44), armL: Wd * (n ? 0.12 : 0.1), armR: Math.min(Wd * (n ? 0.46 : 0.46), 540) };
@@ -900,7 +923,10 @@
         valOdo = Odo(svg, { size: n ? 18 : 28, anchor: 'end' }).at(geo.x + geo.w, geo.y - (n ? 10 : 14));
         lossOdo = Odo(svg, { size: n ? 16 : 24, anchor: 'end', tcls: 'disp coral' }).at(geo.x + geo.w, geo.y + geo.h + (n ? 24 : 34));
         this._who = T(svg, Wd - 16, Hd - 12, '', { 'text-anchor': 'end', class: 'fog', style: 'font-size:12px' });
-        overlay.innerHTML = ''; setSw = modeSwitch(sc, mode); apply.call(sc); this.frame(0);
+        overlay.innerHTML = ''; if (!S.friend) setSw = modeSwitch(sc, mode); apply.call(sc);
+        if (guessing) { const hd = E('g', {}, svg); this._gh = hd; E('rect', { class: 'focusring', x: -16, y: -14, width: geo.w + 32, height: 28, rx: 6, fill: 'none', stroke: '#FFB447', 'stroke-width': 2 }, hd); E('rect', { x: -20, y: -18, width: geo.w + 40, height: 36, fill: 'transparent' }, hd); E('path', { d: 'M-4 0 l-12 -8 v16 z', fill: '#FFB447', filter: 'url(#glow)' }, hd); E('rect', { x: 0, y: -2, width: geo.w, height: 4, fill: '#FFB447' }, hd);
+          gset.handle(hd, (cx2, cy2) => { const r = svg.getBoundingClientRect(); return t.A * 0.3 * (cy2 - r.top - geo.y) / geo.h; }, true); }
+        this.frame(0);
       },
       frame(dt) {
         if (!G) return; beam.frame(dt); dial.frame(dt);
@@ -913,12 +939,13 @@
         E('path', { d, fill: 'url(#liquidG)', 'clip-path': null }, g);
         for (let k = 0; k <= 6; k++) { const f = 1 - k * 0.05, yy = Ys(f); E('line', { x1: x + w, x2: x + w + 6, y1: yy, y2: yy, stroke: '#4A6580' }, g); if (!n) T(g, x + w + 9, yy + 4, `${100 - k * 5}%`, { class: 'fog', style: 'font-size:10.5px' }); }
         T(g, x + w, y - (n ? 30 : 46), 'Value of the bonds', { 'text-anchor': 'end', class: 'fog', style: `font-size:${n ? 11 : 13}px` });
-        if (c.mark != null && isFinite(c.mark)) { const my = Math.max(y - 8, Math.min(y + gh + 8, Ys(1 - c.mark / c.A))); E('line', { x1: x - (n ? 10 : 18), x2: x + w + 6, y1: my, y2: my, stroke: '#E9EEF2', 'stroke-width': 2, 'stroke-dasharray': '5 3' }, g); T(g, x - (n ? 12 : 22), my - 6, mode === 'example' ? 'the rule' : 'your answer', { 'text-anchor': 'end', style: `font-size:${n ? 10.5 : 12.5}px` }); }
+        if (c.mark != null && isFinite(c.mark)) { const my = Math.max(y - 8, Math.min(y + gh + 8, Ys(1 - c.mark / c.A))); E('line', { x1: x - (n ? 10 : 18), x2: x + w + 6, y1: my, y2: my, stroke: '#E9EEF2', 'stroke-width': 2, 'stroke-dasharray': '5 3' }, g); T(g, x - (n ? 12 : 22), my - 6, mode === 'example' ? 'the rule' : S.friend ? 'your guess' : 'your answer', { 'text-anchor': 'end', style: `font-size:${n ? 10.5 : 12.5}px` }); }
         valOdo.set('$' + (c.A * frac).toFixed(2) + 'B'); lossOdo.set('−$' + (c.A * (1 - frac)).toFixed(2) + 'B'); valOdo.frame(dt); lossOdo.frame(dt);
         if (mode === 'mine' && ready && dial.i === steps && Math.abs(gauge.lvl.x - frac) < 0.0015 && !landed) { landed = true; Sound.thud(); if (L.done) hooks.onLanded(); else hooks.onMiss(armed); }
         this._final.textContent = landed && mode === 'mine' && L.done ? `The bonds lost $${fix(t.answer)} billion, and no borrower missed a payment.` : '';
         if (n) this._final.textContent = landed && mode === 'mine' && L.done ? `The bonds lost $${fix(t.answer)} billion.` : '';
-        this._dialHint.textContent = mode === 'mine' ? (ready ? (dial.i < steps ? `Turn it up to +${fix(t.dy)} points` : `Rates up ${fix(t.dy)} points`) : 'Check your answer to unlock it') : '';
+        this._dialHint.textContent = mode === 'mine' ? (ready ? (dial.i < steps ? `Turn it up to +${fix(t.dy)} points` : `Rates up ${fix(t.dy)} points`) : (S.friend ? 'Lock in your guess first' : 'Check your answer to unlock it')) : '';
+        if (this._gh) this._gh.setAttribute('transform', `translate(${x} ${(y + gh * (armed / t.A) / 0.3).toFixed(1)})`);
         describe(`${c.who}: $${c.A} billion of bonds with duration ${c.D}. Rates up ${fix(c.r)} points. Value about $${(c.A * frac).toFixed(2)} billion.`);
       },
     };
@@ -942,159 +969,210 @@
   // ======================= steps =======================
   function showStep(s) {
     const L = S.log[s.id];
+    // ---- 1. Back to 2022: bet on Dick's bond, turn the Fed's dial through the year, then the curve call ----
     if (s.id === 'q1') {
-      // A bet first (not graded): where will Dick's 30-year bond end 2022? Then the dial, then the curve question.
       let sc; const F = W0.FED_2022;
       const BETS = [['up', 'Above $1,000'], ['900', '$900 to $1,000'], ['800', '$800 to $900'], ['low', 'Below $800']];
       const endV = W0.dicksOn('2022-12-30')[1], endBet = endV >= 1000 ? 'up' : endV >= 900 ? '900' : endV >= 800 ? '800' : 'low';
       const atEnd = () => sc.dial.i === F.length - 1;
-      const settle = () => {
-        const r = $('#betResult'); if (!r || !L.bet1) return; const right = L.bet1 === endBet;
-        r.hidden = false; r.className = 'fb ' + (right ? 'ok' : 'bad'); if (NARROW()) setTimeout(() => r.scrollIntoView({ behavior: RM ? 'auto' : 'smooth', block: 'center' }), 1400);
-        r.innerHTML = (right ? '<b>You called it.</b> ' : '<b>It fell further than you bet.</b> ') + `By the end of 2022, each $1,000 of Dick’s bond was worth about ${money(endV)}, a loss of about a third, and Dick’s had not missed a payment.`;
-        if (right) Sound.chime(); else Sound.miss(); recordCall('bet22', right); stamp(right ? 'Called it' : 'Missed', right);
+      const askCurve = () => {
+        const qc = quizChips(s, (pick, ok, why) => { say('boss', (ok ? '' : 'Not quite. ') + esc(why), ok ? 'ok' : 'bad'); });
+        $('#controls').innerHTML = qc.html; qc.wire();
+        say('boss', 'Now the curve. The 2-year went from 0.78% to 4.41% in 2022, the 10-year from 1.63% to 3.88%. Which rose more, and what shape did that leave the curve in?');
       };
-      sc = sceneReplay(s, { onDial: () => { if (atEnd()) { ui.reveal(); $('#dialHelp').hidden = true; setTimeout(settle, RM ? 0 : 900); } $('#dialNext').disabled = atEnd(); } });
+      const settle = () => {
+        const right = L.bet1 === endBet; recordCall('bet22', right); stamp(right ? 'Called it' : 'Missed', right); if (right) Sound.chime(); else Sound.miss();
+        say('boss', `${right ? 'You called it.' : 'Worse than you bet.'} By December each $1,000 of Dick’s bond was worth about ${money(endV)}, and Dick’s never missed a payment.`, right ? 'ok' : 'bad');
+        $('#controls').innerHTML = `<div class="actions"><button class="btn" type="button" id="curveBtn">Next call</button></div>`; $('#curveBtn').addEventListener('click', askCurve);
+      };
+      sc = sceneReplay(s, { onDial: () => { if (atEnd() && !sc.settled && L.bet1 && !L.done) { sc.settled = true; setTimeout(settle, RM ? 0 : 900); } const b = $('#dialNext'); if (b) b.disabled = atEnd(); } });
       mount(sc); sc.dial.enable(L.done || !!L.bet1);
-      const ui = checkConsole(s, { lead: 'In 2022 the Fed raised its rate seven times. You will turn its dial through the year and watch what the U.S. government paid to borrow for 2 years and for 10.',
-        hideQuestion: !L.done, sources: SOURCES.q1,
-        question: 'Your Fed Brief packet showed the 2-year Treasury rate going from 0.78% to 4.41% during 2022, and the 10-year from 1.63% to 3.88%. Which rose more, and what shape did that leave the yield curve in at the end of the year?',
-        after: '' });
-      $('#qwrap').insertAdjacentHTML('beforebegin', `<fieldset id="betBox" ${L.done ? 'hidden' : ''}><legend>First, a bet. Dick’s Sporting Goods sold a 30-year bond in January 2022 for about $1,000. What will it be worth at the end of the year?</legend>
-        <div class="tickets chips bets">${BETS.map(([v, tx]) => `<label class="ticket"><input type="radio" name="bet1" value="${v}" ${L.bet1 === v ? 'checked' : ''}><span>${tx}</span></label>`).join('')}</div></fieldset>
-        <div class="actions" id="dialHelp" ${L.done ? 'hidden' : ''}><button class="btn quiet small" type="button" id="dialNext" ${L.bet1 ? '' : 'disabled'}>Turn to the next meeting</button><span class="attempts" id="dialNote">${L.bet1 ? 'or turn the dial on the stage' : 'Place your bet to unlock the dial'}</span></div>
-        <div class="fb" id="betResult" hidden aria-live="polite"></div>`);
-      $$('input[name=bet1]', con).forEach((r) => r.addEventListener('change', () => { L.bet1 = r.value; save(); sc.dial.enable(true); if (NARROW() && sc.dial.i === 0) setTimeout(() => stage.scrollIntoView({ behavior: RM ? 'auto' : 'smooth' }), 250); $('#dialNext').disabled = atEnd(); $('#dialNote').textContent = 'or turn the dial on the stage'; Sound.detent(); }));
-      $('#dialNext').addEventListener('click', () => sc.dial.set(sc.dial.i + 1, true));
+      shell(s, { who: 'boss', done: L.done, line: L.done ? 'That was 2022. Every rate we cared about went up.' : 'In 2022 the Fed raised its rate seven times. Dick’s Sporting Goods had just sold a 30-year bond for about $1,000. Where will it be by December?',
+        controls: L.done ? '' : chips('bet1', BETS, L.bet1, 'two') + `<div class="actions"><button class="btn" type="button" id="dialNext" ${L.bet1 ? '' : 'disabled'}>Next Fed meeting</button></div>` });
+      if (!L.done) {
+        onChips('bet1', (v) => { if (sc.settled) return; L.bet1 = v; save(); sc.dial.enable(true); $('#dialNext').disabled = atEnd(); say('boss', 'Now play 2022: press Next Fed meeting, or turn the dial.'); if (NARROW()) setTimeout(() => stage.scrollIntoView({ behavior: RM ? 'auto' : 'smooth' }), 250); });
+        $('#dialNext').addEventListener('click', () => sc.dial.set(sc.dial.i + 1, true));
+        if (L.bet1 && atEnd()) askCurve();
+      }
       return;
     }
+    // ---- 2. Read a quote: a salesman pads the price; set what one bond really costs ----
     if (s.id === 'quote') {
-      const sc = sceneQuote(s); mount(sc); const t = task(s.id);
-      ladderConsole(s, { place: 'A dealer offers your bank a bond.', body: `Bond prices are quoted as a percent of the $1,000 face value. The dealer quotes this bond at <b>${t.q.toFixed(2)}</b>. What does one bond cost?`,
-        onFocusExample: () => sc.show('example'), onFocusMine: () => sc.show('mine'), onRows: (rr, ok) => { if (ok) sc.fillMine(); } });
-      autoSwitch(sc, s); return;
+      const t = task(s.id), pad = t.q * 10 + 25; const setter = Setter(Object.assign({}, W0.SETTERS.quote, { value: L.done ? t.answer : 1000, fmt: (v) => money(v, 2), label: 'Price of one bond' }));
+      const sc = sceneQuote(s, setter); mount(sc);
+      shell(s, { who: 'sales', done: L.done, line: `Evening! I have a bond quoted at <b>${t.q.toFixed(2)}</b>. For you, ${money(pad)} a bond.`,
+        controls: `<p class="ask">A quote is a percent of the $1,000 face value. Drag the gold marker to what one bond costs.</p>${setter.html()}<div class="actions"><button class="btn" type="button" id="goBtn2">Pay this price</button></div>` });
+      setter.wire(); autoSwitch(sc, s);
+      $('#goBtn2').addEventListener('click', () => {
+        const v = setter.v, res = judgeRows(s, [null, String(v)]);
+        if (res.ok) { say('boss', `${money(v, 2)} is the real price. ${C.praise(t, h)}`, 'ok'); showNext(); }
+        else if (Math.abs(v - pad) < 0.01) say('boss', `That’s his number, not the quote’s. ${t.q.toFixed(2)} means ${t.q.toFixed(2)}% of $1,000.`, 'bad');
+        else say('boss', esc(res.msg.replace(/^Price of one bond: /, '')), 'bad');
+      });
+      return;
     }
+    // ---- 3. The seesaw: bet on a bond, then pull the yield ----
     if (s.id === 'seesaw') {
       const t = task(s.id), target = t.y * 100; let sc;
-      const lead = () => (L.done ? `New bonds now pay <b>${p2(target)}</b>.` : sc.st.bet
-        ? `Your bet: the <b>${sc.st.bet === 'long' ? '30-year' : '2-year'} bond</b>. Now pull the gold grip up to <b>${p2(target)}</b> and watch both prices. You can change your bet until you get there.`
-        : `New bonds are about to pay <b>${p2(target)}</b> instead of 4%. Which bond’s price will fall further? Tap your bet on the beam.`);
       const judge = (id, y, settling) => {
-        const fb = $('#fb'); const e = W0.seesawEntry(y, id); const res = C.judgeTask(t, e, h); L.attempts = (L.attempts || 0) + 1; if (settling) recordCall('seesaw', res.ok); stamp(res.ok ? (settling ? 'Called it' : 'Right') : (settling ? 'Not this time' : 'Not yet'), res.ok);
-        if (res.ok) { L.value = e.value; L.choice = e.choice; markDone(s.id); Sound.chime(); fb.className = 'fb ok'; fb.innerHTML = `<b>${settling ? 'You called it.' : 'Right.'}</b> ` + C.praise(t, h); showNext(false); $('#helpRow').hidden = true; $('#lead').innerHTML = lead(); }
-        else {
-          if (!L.done) { L.value = e.value; L.choice = e.choice; }
-          L.fails = (L.fails || 0) + 1; Sound.miss(); fb.className = 'fb bad';
-          const p2y = W0.seesawPrice(2, y), p30 = W0.seesawPrice(30, y);
-          fb.innerHTML = (settling ? '<b>Not this time.</b> You bet on the 2-year bond. ' : '<b>Not yet.</b> ') + esc(`The 2-year bond moved ${money(1000 - p2y)} from $1,000; the 30-year bond moved ${money(1000 - p30)}. Tap the bond that moved further.`);
-          renderHelp();
-        }
-        $('#att').textContent = 'Checks so far: ' + L.attempts; save();
+        const e = W0.seesawEntry(y, id); const res = C.judgeTask(t, e, h); L.attempts = (L.attempts || 0) + 1; if (settling) recordCall('seesaw', res.ok);
+        stamp(res.ok ? (settling ? 'Called it' : 'Right') : (settling ? 'Not this time' : 'Not yet'), res.ok);
+        const p2y = W0.seesawPrice(2, y), p30 = W0.seesawPrice(30, y);
+        if (res.ok) { L.value = e.value; L.choice = e.choice; markDone(s.id); Sound.chime(); say('boss', `${settling ? 'You called it. ' : ''}${C.praise(t, h)} Thirty years locked into $40 a year is a long time to be stuck below the market.`, 'ok'); showNext(); }
+        else { if (!L.done) { L.value = e.value; L.choice = e.choice; } L.fails = (L.fails || 0) + 1; Sound.miss(); say('boss', `The 2-year moved ${money(1000 - p2y)}; the 30-year moved ${money(1000 - p30)}. Tap the one that moved further.`, 'bad'); }
+        save();
       };
       sc = sceneSeesaw(s, {
         onYield: (y) => { if (!L.done && sc.st.bet && Math.abs(y - target) < 1e-9 && !sc.settled) { sc.settled = true; setTimeout(() => judge(sc.st.bet, 4 + sc.beam.dyT, true), RM ? 0 : 650); } },
         onTap: (id, y) => {
           if (L.done) { sc.beam.select(id); return; }
-          if (!sc.settled) { sc.st.bet = id; L.bet = id; save(); sc.setBet(id); Sound.detent(); $('#lead').innerHTML = lead(); $('#fb').className = 'fb'; $('#fb').innerHTML = ''; return; }
-          sc.beam.select(id); if (Math.abs(y - target) > 1e-9) { $('#fb').className = 'fb bad'; $('#fb').innerHTML = `<b>Not yet.</b> The yield reads ${p2(y)}. Pull it back to ${p2(target)}, then tap a bond.`; return; } judge(id, y, false);
+          if (!sc.settled) { sc.st.bet = id; L.bet = id; save(); sc.setBet(id); Sound.detent(); say('boss', `Your bet: the ${id === 'long' ? '30-year' : '2-year'}. Now pull the gold grip up to ${p2(target)}.`); return; }
+          sc.beam.select(id); if (Math.abs(y - target) > 1e-9) { say('boss', `Pull the yield back to ${p2(target)}, then tap a bond.`, 'bad'); return; } judge(id, y, false);
         } });
       mount(sc);
-      con.innerHTML = `${kicker(s.id)}<h2 id="t">${esc(TITLES[s.id])}</h2><p class="place">Your bank owns two bonds. Each pays $40 a year on $1,000 and sells for $1,000 today. One is repaid in 2 years, the other in 30.</p>
-        <p class="lead" id="lead"></p>
-        <p class="hint">On a keyboard, select a bond and press Enter; select the grip and use the arrow keys.</p>
-        <div class="actions"><span class="attempts" id="att">${L.attempts ? 'Checks so far: ' + L.attempts : ''}</span></div>
-        <div class="fb" id="fb" aria-live="polite">${L.done ? '<b>Right.</b> ' + C.praise(t, h) : ''}</div><div class="actions" id="helpRow" hidden></div><div class="helpbox" id="helpBox" aria-live="polite"></div>
-        ${nextRow(s.id, L.done)}${pager(s.id)}`;
-      $('#lead').innerHTML = lead();
-      if (L.done) $('#fb').className = 'fb ok';
-      function renderHelp() {
-        const row = $('#helpRow'); const fails = L.fails || 0; if (!fails || L.done) { row.hidden = true; return; } row.hidden = false;
-        row.innerHTML = ['Show me how to read it', 'Show me the answer'].slice(0, Math.min(2, fails)).map((lab, i) => `<button class="btn small quiet" type="button" data-l="${i + 1}">${lab}</button>`).join('');
-        $$('button[data-l]', row).forEach((b) => b.addEventListener('click', () => { const lvl = Number(b.dataset.l); L.help = Math.max(L.help || 0, lvl); save();
-          $('#helpBox').innerHTML = lvl === 1 ? `Compare how far each price tag moved from $1,000 at ${p2(target)}, and tap the bond that moved more.` : `At ${p2(target)}, the 30-year bond sells for ${money(t.p30)} and the 2-year bond for ${money(t.p2)}. The 30-year bond moved further from $1,000, so tap it.`; }));
-      }
-      renderHelp(); wireCommon(s.id); return;
+      shell(s, { who: 'boss', done: L.done, line: L.done ? `New bonds now pay ${p2(target)}. ${C.praise(t, h)}` : `New bonds are about to pay <b>${p2(target)}</b> instead of 4%. Ours pay $40 a year: one for 2 more years, one for 30. Which takes the bigger hit? Tap your bet.` });
+      return;
     }
+    // ---- 4. Old bond, new rates: a customer at the front desk ----
     if (s.id === 'q2') {
       const sc = sceneCoupons(s); mount(sc);
-      checkConsole(s, { onAnswer: (pick, ok) => sc.answered(ok) }); return;
+      const qc = quizChips(s, (pick, ok, why) => { sc.answered(ok); say('boss', ok ? `${esc(why)} Nobody pays $1,000 for $30 a year when $1,000 buys $50 a year. With 10 years left it sells for about ${money(W0.P(0.03, 10, 0.05))}.` : esc(why), ok ? 'ok' : 'bad'); });
+      shell(s, { who: 'customer', done: L.done, line: 'My bond pays $30 a year. New ones pay $50. Mine still says $1,000 on it, so it’s worth $1,000, isn’t it?', controls: qc.html }); qc.wire();
+      return;
     }
+    // ---- 5. Duration: mark how far the price falls, tip the beam, then pick the dollars ----
     if (s.id === 'dur1') {
-      const sc = sceneDuration(s); mount(sc); const t = task(s.id);
-      ladderConsole(s, { place: 'Duration is one number that says how far a bond’s price moves when rates move. Longer bonds have bigger durations.',
-        body: `Rule of thumb: price falls by about duration × rise in rates, in percent. Your bank holds <b>${mm(t.A)}</b> of a bond with duration <b>${t.D}</b>. Rates rise <b>${fix(t.dy)}</b> ${t.dy === 1 ? 'point' : 'points'}. About how much does it lose?`,
-        onFocusExample: () => sc.show('example'), onFocusMine: () => sc.show('mine'), onRows: (rr) => sc.rows(rr) });
-      autoSwitch(sc, s); return;
+      const t = task(s.id); const setter = Setter(Object.assign({}, W0.SETTERS.dur1, { value: L.done ? t.D * t.dy : 0, fmt: (v) => `price falls ${fix(v, 1)}%`, label: 'How far the price falls, in percent' }));
+      const sc = sceneDuration(s, setter); mount(sc);
+      const dollars = () => W0.durDollarOptions(t).sort((a, b) => h.fnv1a(S.code + a[1]) - h.fnv1a(S.code + b[1])).map(([v]) => [String(v), mm(v)]);
+      const askDollars = () => {
+        $('#controls').innerHTML = `<p class="ask">How many dollars is that on ${mm(t.A)}?</p>${chips('dol', dollars(), null, 'two')}<div class="actions"><button class="btn" type="button" id="dolBtn">Tell the treasurer</button></div>`;
+        $('#dolBtn').addEventListener('click', () => { const c = $('input[name=dol]:checked', con); if (!c) { fb('Pick an amount first.', false); return; }
+          const res = judgeRows(s, [fix(setter.v, 2) + '%', c.value]); fb('', null);
+          if (res.ok) { say('boss', `${C.praise(t, h)} That’s what I tell the board.`, 'ok'); showNext(); } else say('boss', esc(res.msg.replace(/^Dollars lost: /, '')), 'bad'); });
+      };
+      shell(s, { who: 'boss', done: L.done, line: L.done ? C.praise(t, h) : `We hold <b>${mm(t.A)}</b> of a bond with duration <b>${t.D}</b>, and rates just rose <b>${fix(t.dy)}</b> ${t.dy === 1 ? 'point' : 'points'}. How far does its price fall?`,
+        controls: L.done ? '' : `<p class="ask">Rule of thumb: price falls by about duration × rise in rates, in percent. Drag the gold marker, then tip the beam.</p>${setter.html()}<div class="actions"><button class="btn" type="button" id="tipBtn">Tip the beam</button></div>` });
+      if (!L.done) {
+        setter.wire(); autoSwitch(sc, s);
+        $('#tipBtn').addEventListener('click', () => {
+          sc.tip(); const ok = Math.abs(setter.v - t.D * t.dy) < 1e-9; Sound.thud();
+          if (!ok) { L.attempts = (L.attempts || 0) + 1; recordCall('dur1', false); L.fails = (L.fails || 0) + 1; save(); helpLadder(t, L); stamp('Off the mark', false); say('boss', `The beam says ${fix(t.D * t.dy)}%: ${t.D} × ${fix(t.dy)}. Move your marker there.`, 'bad'); return; }
+          stamp('Right on it', true); say('boss', `${t.D} × ${fix(t.dy)} = ${fix(t.D * t.dy)}%. Now the dollars.`, 'ok'); setTimeout(askDollars, RM ? 0 : 500);
+        });
+      }
+      return;
     }
+    // ---- 6. Which loses most? ----
     if (s.id === 'q3') {
-      let ui; const sc = sceneWhich(s, { onPick: (j) => ui.pick(j) }); mount(sc);
-      ui = checkConsole(s, { lead: 'Each bond sits at its duration. Make your call: tap a bond on the beam or choose below, then check and watch the beam tip.', question: C.quiz[s.quiz].q, onPick: (j) => sc.selectQuiz(j), onAnswer: () => sc.answered() }); return;
+      let qc; const sc = sceneWhich(s, { onPick: (j) => { const r = $(`input[name=q][value="${j}"]`, con); if (r) { r.checked = true; } } }); mount(sc);
+      qc = quizChips(s, (pick, ok, why) => { sc.answered(); say('boss', esc(why), ok ? 'ok' : 'bad'); });
+      shell(s, { who: 'boss', done: L.done, line: 'Rates go up 1 point tomorrow. Each bond sits at its duration. Which one loses the most? Tap it, then lock it in.', controls: qc.html }); qc.wire((j) => sc.selectQuiz(j));
+      return;
     }
+    // ---- 7. Spread: the salesman calls it free money; measure what it pays for ----
     if (s.id === 'spread') {
-      const sc = sceneSpread(s); mount(sc); const t = task(s.id);
-      ladderConsole(s, { place: 'Why does a company pay more to borrow than the government?',
-        body: `A <b>spread</b> is the extra yield a borrower pays over a Treasury bond of the same length. It pays lenders for the risk of not being repaid. A company’s 10-year bond yields <b>${p2(t.corp)}</b>; the 10-year Treasury yields <b>${p2(t.tsy)}</b>. What is the spread?`,
-        onFocusExample: () => sc.show('example'), onFocusMine: () => sc.show('mine'), onRows: (rr) => sc.rows(rr) });
-      autoSwitch(sc, s); return;
+      const t = task(s.id); const setter = Setter(Object.assign({}, W0.SETTERS.spread, { value: L.done ? t.bps : 0, fmt: (v) => `${v} basis points = ${fix(v / 100)} points`, label: 'Spread in basis points' }));
+      const sc = sceneSpread(s, setter); mount(sc);
+      shell(s, { who: 'sales', done: L.done, line: `This company’s 10-year bond yields <b>${p2(t.corp)}</b>. The 10-year Treasury pays <b>${p2(t.tsy)}</b>. That’s free money!`,
+        controls: `<p class="ask">The <b>spread</b> is the extra yield over a Treasury of the same length. Drag the bracket up to the company’s line.</p>${setter.html()}<div class="actions"><button class="btn" type="button" id="spBtn">That’s the spread</button></div>` });
+      setter.wire(); autoSwitch(sc, s);
+      $('#spBtn').addEventListener('click', () => {
+        const v = setter.v, res = judgeRows(s, [fix(v / 100), String(v)]);
+        if (res.ok) { say('boss', `${v} basis points. On $1,000,000 that’s ${money(100 * v)} a year more than a Treasury pays. It isn’t free: it pays us for the chance that the company, unlike the U.S. government, never pays us back.`, 'ok'); showNext(); }
+        else say('boss', `Not yet. The gap is ${p2(t.corp)} − ${p2(t.tsy)}. Each tick on the bracket is 25 basis points.`, 'bad');
+      });
+      return;
     }
+    // ---- 8. Dragovia: the minister's press conference ----
     if (s.id === 'q4') {
-      const sc = sceneDragovia(s); mount(sc);
-      checkConsole(s, { question: 'Dragovia, a small country, has sold bonds with a fixed coupon. After the news, lenders fear they will not be repaid. A bond’s yield is the yearly return a buyer earns at the price paid. What happens to Dragovia’s bonds?', onAnswer: (pick, ok) => sc.answered(ok) }); return;
+      const sc = sceneDragovia(s); mount(sc); const DG = W0.DRAGOVIA, yA = W0.yieldAt(DG.after, DG.coupon, DG.years) * 100;
+      const qc = quizChips(s, (pick, ok, why) => { sc.answered(ok); say('boss', ok ? `${esc(why)} Buyers now pay $800 for the same $60 a year: about ${fix(yA, 1)}% a year, counting the $1,000 at the end.` : esc(why), ok ? 'ok' : 'bad'); });
+      shell(s, { who: 'minister', done: L.done, line: 'Dragovia will pay every coupon on every bond. Every one!', controls: `<p class="ask">Lenders don’t believe him. What happens to Dragovia’s bonds? (A bond’s <b>yield</b> is the yearly return a buyer earns at the price paid.)</p>${qc.html}` }); qc.wire();
+      return;
     }
+    // ---- 9. Puerto Rico: one sentence ----
     if (s.id === 'pr') {
-      const sc = scenePR(s); mount(sc);
-      ladderConsole(s, { place: 'It is October 2017. The U.S. president says on TV that Puerto Rico’s debt will have to be wiped out.',
-        body: 'Its main bond has been trading at <b>44</b> cents on the dollar. The next day it trades as low as about <b>30</b>. By what percent had it fallen at that low?',
-        choice: { legend: 'Why did one sentence move the price so much?', options: [['recover', 'Lenders now expected to get back less of what they were owed'], ['rate', 'Puerto Rico had raised the interest rate on its bonds'], ['fed', 'The Fed raised interest rates that day']] },
-        onFocusExample: () => sc.show('example'), onFocusMine: () => sc.show('mine'), onRows: (rr) => sc.rows(rr) });
-      autoSwitch(sc, s); return;
+      const t = task(s.id); const sc = scenePR(s); mount(sc);
+      const pcts = W0.prPctOptions(t).sort((a, b) => h.fnv1a('pr' + a[1]) - h.fnv1a('pr' + b[1])).map(([v]) => [fix(v * 100, 3) + '%', fix(v * 100, 1) + '%']);
+      const REASONS = [['recover', 'Lenders now expected to get back less of what they were owed'], ['rate', 'Puerto Rico had raised the interest rate on its bonds'], ['fed', 'The Fed raised interest rates that day']];
+      const askWhy = (pct) => {
+        $('#controls').innerHTML = `<p class="ask">Why did one sentence move it so much?</p>${chips('dec', REASONS, null)}<div class="actions"><button class="btn" type="button" id="whyBtn">Lock it in</button></div>`;
+        $('#whyBtn').addEventListener('click', () => { const c = $('input[name=dec]:checked', con); if (!c) { fb('Pick a reason first.', false); return; } fb('', null);
+          const res = judgeRows(s, [String(t.cents), pct], c.value);
+          if (res.ok) { sc.rows([{ ok: true }, { ok: true }]); say('boss', C.praise(t, h), 'ok'); showNext(); } else say('boss', 'Its coupon didn’t change, and the Fed didn’t move that day. What changed was how much lenders expected to get back.', 'bad'); });
+      };
+      shell(s, { who: 'news', done: L.done, line: L.done ? C.praise(t, h) : 'October 2017. The U.S. president says on TV that Puerto Rico’s debt will have to be wiped out. Its main bond had traded at <b>44</b> cents on the dollar; the next day it traded as low as about <b>30</b>.',
+        controls: L.done ? '' : `<p class="ask">By what percent had it fallen at that low? The fall is 14 cents.</p>${chips('pct', pcts, null, 'two')}<div class="actions"><button class="btn" type="button" id="pctBtn">Lock it in</button></div>` });
+      if (!L.done) {
+        autoSwitch(sc, s);
+        $('#pctBtn').addEventListener('click', () => { const c = $('input[name=pct]:checked', con); if (!c) { fb('Pick a percent first.', false); return; } fb('', null);
+          const ok = Math.abs(parseFloat(c.value) / 100 - t.cents / t.p0) < 0.001;
+          if (!ok) { L.attempts = (L.attempts || 0) + 1; recordCall('pr', false); L.fails = (L.fails || 0) + 1; save(); helpLadder(t, L); stamp('Not yet', false); Sound.miss();
+            const v = parseFloat(c.value) / 100; say('boss', Math.abs(v - t.cents / t.p1) < 0.001 ? 'Divide the fall by where it started, 44, not by 30.' : Math.abs(v - t.p1 / t.p0) < 0.001 ? 'That’s how much was left. The fall is 14 ÷ 44.' : 'Divide the 14-cent fall by the starting price, 44 cents.', 'bad'); return; }
+          sc.rows([{ ok: true }, { ok: true }]); stamp('Right', true); Sound.chime(); say('boss', `${fix(100 * t.cents / t.p0, 1)}% gone at the low.`, 'ok'); setTimeout(() => askWhy(c.value), RM ? 0 : 400); });
+      }
+      return;
     }
+    // ---- 10. A bank's big bet: the colleague who bought them ----
     if (s.id === 'bridge') {
       const t = task(s.id); let sc;
-      const coda = () => { const c = $('#coda'); if (c) { c.hidden = false; setTimeout(() => c.scrollIntoView({ behavior: RM ? 'auto' : 'smooth', block: 'center' }), NARROW() ? 2200 : 300); } showNext(false); };
       const parseBil = (v) => { const x = h.parseMoney(String(v == null ? '' : v).replace(/\s*(billions?|bn|b)\s*$/i, '')); return isFinite(x) && Math.abs(x) >= 1e5 ? x / 1e9 : x; };
+      const coda = () => { const line = `The bonds lost about $${fix(t.answer)} billion, and not one borrower missed a payment. In Unit 5 you meet a real bank that made this bet: Silicon Valley Bank.`;
+        say('colleague', line, 'ok'); showNext(); };
       sc = sceneBridge(s, { onDial: () => {}, onLanded: () => coda(),
-        onMiss: (v) => { const fb = $('#fb'); fb.className = 'fb bad'; fb.innerHTML = `<b>Off the mark.</b> The gauge stopped at a loss of about $${fix(t.answer)} billion; your mark said $${fix(v)} billion. Fix your lines with duration × rise × amount, then check again.`; Sound.miss(); stamp('Off the mark', false); } });
+        onMiss: (v) => {
+          if (S.friend) { const ok = W0.friendClose(v, t.answer); recordCall('bridge', ok); stamp(ok ? 'Called it' : 'Off the mark', ok); if (ok) Sound.chime(); else Sound.miss();
+            say('colleague', `${ok ? 'Close enough to sting.' : `You guessed $${fix(v)} billion.`} It was about $${fix(t.answer)} billion: ${t.D} × ${t.dy} = ${fix(t.D * t.dy)}% of $${t.A} billion. And not one borrower missed a payment.`, ok ? 'ok' : 'bad'); showNext(); return; }
+          stamp('Off the mark', false); Sound.miss(); say('colleague', `The gauge stopped at about $${fix(t.answer)} billion. Your mark said $${fix(v)} billion. Check the percent and the multiplication, then mark it again.`, 'bad'); } });
       mount(sc);
-      ladderConsole(s, { place: 'The same calculation as the Duration step, with a bank’s numbers.',
-        body: `In 2021, a bank put <b>$${t.A} billion</b> of its depositors’ money into bonds with duration <b>${t.D}</b>. Then rates rose <b>${fix(t.dy)}</b> points. About how much did the bonds lose?`,
-        holdNext: true, call: true, praise: () => `About $${fix(t.answer)} billion. Now turn the Fed’s dial up ${fix(t.dy)} points and watch it happen.`,
-        afterForm: `<div class="coda" id="coda" hidden><p style="margin:0 0 10px">In Unit 5 you meet that bank.</p><p style="font:400 16px/1.55 var(--text);color:var(--fog);margin:0">${C.praise(t, h)}</p></div>`,
-        onFocusExample: () => sc.show('example'), onFocusMine: () => sc.show('mine'),
-        onRows: (rr, ok) => { if (ok) return; const v = parseBil(($('.rowin[data-row="1"]') || {}).value); if (isFinite(v) && v > 0) { sc.arm(v); setTimeout(() => { const fb = $('#fb'); if (fb && /^<b>Not yet/.test(fb.innerHTML)) fb.innerHTML += ` Or test your number: turn the Fed’s dial up ${fix(t.dy)} points and see where the gauge stops.`; }, 0); } },
-        onDone: () => sc.unlock() });
-      if (L.done) { sc.unlock(); }
-      autoSwitch(sc, s); return;
+      const line = `I bought these in 2021: <b>$${t.A} billion</b> of the bank’s money, duration <b>${t.D}</b>. Rates are up <b>${fix(t.dy)}</b> points since. How much did I lose?`;
+      if (S.friend) {
+        const setter = Setter({ min: 0, max: Math.round(t.A * 3) / 10, step: 0.1, value: Math.round(t.A) / 10, fmt: (v) => `$${fix(v, 1)} billion`, label: 'Your guess at the loss' });
+        sc.guess(setter); layoutStage();
+        shell(s, { who: 'colleague', done: false, line, controls: `<p class="ask">Drag the gold mark on the gauge to your guess, then turn the Fed’s dial.</p>${setter.html()}<div class="actions"><button class="btn" type="button" id="lockBtn">Lock in my guess</button></div>` });
+        setter.wire(); $('#lockBtn').addEventListener('click', () => { sc.lock(); say('colleague', `Now turn the Fed’s dial up ${fix(t.dy)} points.`); $('#controls').innerHTML = ''; });
+        return;
+      }
+      const opts = W0.bridgePctOptions(t).sort((a, b) => h.fnv1a(S.code + a[1]) - h.fnv1a(S.code + b[1])).map(([v]) => [String(v), fix(v) + '%']);
+      shell(s, { who: 'colleague', done: L.done, line: L.done ? `The bonds lost about $${fix(t.answer)} billion. Turn the dial again if you want to watch it.` : line,
+        controls: L.done ? '' : `<p class="ask">First, how far did their price fall?</p>${chips('bp', opts, null, 'two')}<p class="ask">Then the loss, in billions of dollars:</p><div class="typein"><span>$</span><input id="loss" inputmode="decimal" autocomplete="off" placeholder="0.0" aria-label="Loss in billions of dollars"><span>billion</span></div><div class="actions"><button class="btn" type="button" id="markBtn">Mark it on the gauge</button></div>` });
+      if (L.done) { sc.unlock(); return; }
+      autoSwitch(sc, s);
+      $('#markBtn').addEventListener('click', () => {
+        const c = $('input[name=bp]:checked', con); if (!c) { fb('Pick how far the price fell first.', false); return; } fb('', null);
+        const lossTxt = $('#loss').value, v = parseBil(lossTxt); if (!isFinite(v) || v <= 0) { fb('Type the loss in billions, like 1.2.', false); return; }
+        const res = judgeRows(s, [c.value + '%', lossTxt]);
+        if (res.ok) { sc.unlock(); say('colleague', `$${fix(v)} billion. Now turn the Fed’s dial up ${fix(t.dy)} points and watch it go.`, 'ok'); }
+        else { sc.arm(v); say('colleague', `${esc(res.msg.replace(/^[^:]+: /, ''))} Or turn the dial and see where the gauge stops.`, 'bad'); }
+      });
+      return;
     }
+    // ---- 11. The note (class only) ----
     if (s.id === 'note') {
       const sc = sceneLedger(); mount(sc);
       const N = C.note, n = S.notes;
-      const f = (k, lab) => `<div><label for="n_${k}">${lab}</label><textarea id="n_${k}" data-k="${k}">${esc(n[k] || '')}</textarea></div>`;
-      con.innerHTML = `${kicker(s.id)}<h2 id="t">${esc(TITLES.note)}</h2><p class="lead">${esc(N.prompt)}</p>
-        <div class="ledger">${f('ba', 'An advantage of selling bonds')}${f('bd', 'A drawback of selling bonds')}${f('sa', 'An advantage of selling shares')}${f('sd', 'A drawback of selling shares')}</div>
-        <p class="wc" id="wc" aria-live="polite"></p><div class="fb" id="fb" aria-live="polite"></div>${nextRow(s.id, L.done)}${pager(s.id)}`;
+      const f = (k, lab) => `<div><label for="n_${k}">${lab}</label><textarea id="n_${k}" data-k="${k}" rows="2">${esc(n[k] || '')}</textarea></div>`;
+      shell(s, { who: 'boss', done: L.done, line: 'A company needs $50 million. Should it sell bonds or shares? Give me one advantage and one drawback of each.',
+        controls: `<div class="ledger">${f('ba', 'Bonds: an advantage')}${f('bd', 'Bonds: a drawback')}${f('sa', 'Shares: an advantage')}${f('sd', 'Shares: a drawback')}</div><p class="wc" id="wc" aria-live="polite"></p>` });
       const compose = () => ['ba', 'bd', 'sa', 'sd'].map((k) => `${{ ba: 'Bonds, advantage', bd: 'Bonds, drawback', sa: 'Shares, advantage', sd: 'Shares, drawback' }[k]}: ${String(n[k] || '').trim().replace(/[.\s]+$/, '')}.`).join(' ');
       const own = () => ['ba', 'bd', 'sa', 'sd'].reduce((a, k) => a + words(n[k]), 0);
       const all4 = () => ['ba', 'bd', 'sa', 'sd'].every((k) => words(n[k]) > 0);
-      const upd = (typed) => {
+      const upd = () => {
         const w = own(), ok = w >= N.minWords && all4();
-        $('#wc').textContent = `${w} ${w === 1 ? 'word' : 'words'} so far. Write at least ${N.minWords} across the four boxes, in your own words. This step saves itself and prints on your receipt.`;
-        if (ok) { S.memo = compose(); if (!L.done) { L.attempts = Math.max(L.attempts || 0, 1); markDone(s.id); $('#fb').className = 'fb ok'; $('#fb').innerHTML = '<b>Saved.</b> Your note will print on your receipt.'; showNext(false); } }
-        else if (!L.done) S.memo = compose();
-        else if (typed) $('#wc').textContent += ' Your saved note stays on your receipt until this one is long enough.';
+        $('#wc').textContent = ok ? `${w} words. Saved; it prints on your receipt.` : `${w} of ${N.minWords} words.`;
+        if (ok) { S.memo = compose(); if (!L.done) { L.attempts = Math.max(L.attempts || 0, 1); markDone(s.id); showNext(true); } } else if (!L.done) S.memo = compose();
         save(); sc.update();
       };
-      $$('.ledger textarea', con).forEach((ta) => ta.addEventListener('input', () => { n[ta.dataset.k] = ta.value; upd(true); }));
-      upd(false); if (L.done) { $('#fb').className = 'fb ok'; $('#fb').innerHTML = '<b>Saved.</b> Your note will print on your receipt.'; }
-      wireCommon(s.id); $('#nextBtn').textContent = 'Go to your receipt'; return;
+      $$('.ledger textarea', con).forEach((ta) => ta.addEventListener('input', () => { n[ta.dataset.k] = ta.value; upd(); }));
+      upd(); $('#nextBtn').textContent = 'Go to your receipt'; return;
     }
   }
-  // Steps with a worked example open on it, then move to the student's numbers (unless the student moves first).
+  // Steps with a worked example open on it, then move to the player's numbers (unless the player moves first).
   function autoSwitch(sc, s) {
     if (S.log[s.id].done) return; const at = S.at; let moved = false;
-    $$('.rowin', con).forEach((x) => x.addEventListener('focus', () => { moved = true; }, { once: true }));
-    $('#exStrip').addEventListener('click', () => { moved = true; });
-    setTimeout(() => { if (!moved && S.at === at && scene === sc) sc.show('mine'); }, RM ? 4500 : 3400);
+    con.addEventListener('pointerdown', () => { moved = true; }, { once: true });
+    setTimeout(() => { if (!moved && S.at === at && scene === sc) sc.show('mine'); }, RM ? 4500 : 3200);
   }
 
   // ======================= navigation =======================
@@ -1107,60 +1185,51 @@
   }
 
   function showStart() {
-    S.at = 'start'; renderTape();
-    const last = store.get(KEY + ':last'); const saved = last ? store.get(KEY + ':' + D.seedFor(last)) : null; const n = D.STEPS.length;
+    S.at = 'start'; S.friend = false; renderTape(); renderCalls();
+    const last = store.get(KEY + ':last'); const saved = last ? store.get(KEY + ':' + D.seedFor(last)) : null;
     mount(sceneStart());
     con.innerHTML = `<p class="kicker">Financial Markets and Institutions, Unit 4</p><h1 id="t">The Bond Desk</h1>
-      <p class="lead">A bond is a loan built to be resold, and its price moves every time interest rates do. You make seven calls about where the money goes, and the desk shows you whether you were right.</p>
-      <p class="place">You help manage the bonds of Great Lakes Community Bank, which keeps part of its depositors’ money in bonds it can sell any day.</p>
-      ${saved ? `<p>Welcome back. Your desk code is <b class="code">${h.fmtCode(last)}</b>.</p>` : ''}
-      <div class="actions"><button class="btn" type="button" id="goBtn">${saved ? 'Continue where you left off' : 'Start the desk'}</button></div>
-      <p class="hint">Just playing, not in the class? Skip any calculation with “Skip to the next step” at the bottom of it. Your calls still count.</p>
-      <p class="kicker" style="margin-top:22px">For class</p>
-      <ul class="howto">
-        <li>${n} short steps. Each calculation shows a worked example first, then your own numbers.</li>
-        <li><b>Graded on completion.</b> Finish all ${n} steps for all ${D.POINTS} points (${Math.ceil(n / 2)} or more earns ${D.POINTS / 2}). A wrong answer never costs points.</li>
-        <li>Stuck? After a wrong answer, help buttons show the setup with your own numbers.</li>
-        <li>Keep the Desmos calculator (top of the page) open beside the desk.</li>
-        <li>Finish by downloading your receipt and uploading it to the assignment page.</li></ul>
+      <p class="lead">A bond is a loan built to be resold, and its price moves whenever interest rates do. Make the calls at Great Lakes Community Bank’s bond desk and see whether you were right.</p>
+      <div class="actions"><button class="btn" type="button" id="goBtn">${saved ? 'Continue the desk' : 'Play for class'}</button><button class="btn quiet" type="button" id="friendBtn">Just play: 7 calls, no math</button></div>
+      <p class="credit">For class: reach the end and download your receipt. That is the whole grade.${saved ? ` Your desk code is <b class="code">${h.fmtCode(last)}</b>.` : ''}</p>
       <details class="resume"><summary>Started on another computer?</summary>
         <form id="codeForm" novalidate><label for="dc">Your desk code</label><input type="text" id="dc" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD-2345" aria-describedby="dcHelp">
-        <p id="dcHelp">Your desk code is at the bottom of every page of the desk and on your receipt.</p><p class="err" id="startErr" role="alert"></p>
+        <p id="dcHelp">It is on your receipt and at the bottom of the desk.</p><p class="err" id="startErr" role="alert"></p>
         <div class="actions"><button class="btn quiet small" type="submit">Continue with this code</button></div></form></details>`;
     $('#goBtn').addEventListener('click', () => { startFor(saved ? last : h.newCode()); const first = D.STEPS.find((s) => !S.log[s.id].done); go(saved && S.at && S.at !== 'start' ? S.at : (first ? first.id : 'receipt')); });
-    $('#codeForm').addEventListener('submit', (e) => { e.preventDefault(); const v = $('#dc').value; if (!h.validCode(v)) { $('#startErr').textContent = 'A desk code is 8 letters and numbers, like ABCD-2345. Check it against your receipt.'; $('#dc').focus(); return; } startFor(v); const first = D.STEPS.find((s) => !S.log[s.id].done); go(S.at && S.at !== 'start' ? S.at : (first ? first.id : 'receipt')); });
+    $('#friendBtn').addEventListener('click', startFriend);
+    $('#codeForm').addEventListener('submit', (e) => { e.preventDefault(); const v = $('#dc').value; if (!h.validCode(v)) { $('#startErr').textContent = 'A desk code is 8 letters and numbers, like ABCD-2345.'; $('#dc').focus(); return; } startFor(v); const first = D.STEPS.find((s) => !S.log[s.id].done); go(S.at && S.at !== 'start' ? S.at : (first ? first.id : 'receipt')); });
   }
 
-  // ======================= the scorecard (end of the game; the note and receipt follow) =======================
+  // ======================= the scorecard (end of the game; for class, the note and receipt follow) =======================
   function shareUrl() { return location.href.split('#')[0].split('?')[0].replace(/index\.html$/, ''); }
   function scoreData() {
-    const made = CALLS.filter(([k]) => S.calls[k] != null), right = made.filter(([k]) => S.calls[k]).length, bt = task('bridge');
+    const ids = callIds(), right = ids.filter((k) => S.calls[k]).length, bt = task('bridge');
     const line = `When rates rose ${fix(bt.dy)} points, a bank’s $${bt.A} billion of bonds lost about $${fix(bt.answer)} billion, and nobody missed a payment.`;
-    return { made, right, line, text: `I called ${right} of ${CALLS.length} at The Bond Desk. ${line} Can you call it better? ${shareUrl()}` };
+    return { ids, right, line, text: `I called ${right} of ${ids.length} at The Bond Desk. ${line} Can you call it better? ${shareUrl()}` };
   }
   function showScore() {
     const d = scoreData();
     mount({ tall: true, layout(Wd, Hd) {
       backdrop(Wd, Hd, { cone: [Wd / 2, Hd * 0.95, Wd * 0.42] }); overlay.innerHTML = '';
-      const card = document.createElement('div'); card.className = 'scorecard';
-      card.innerHTML = `<p class="sc-k">The Bond Desk</p><p class="sc-big">${d.right}<span> of ${CALLS.length}</span></p><p class="sc-sub">calls right on the first try</p>
-        <ul>${CALLS.map(([k, lab]) => `<li class="${S.calls[k] == null ? 'na' : S.calls[k] ? 'y' : 'n'}"><span aria-hidden="true">${S.calls[k] == null ? '·' : S.calls[k] ? '✓' : '✗'}</span>${esc(lab)}<span class="sr-only">${S.calls[k] == null ? ', not called' : S.calls[k] ? ', right' : ', missed'}</span></li>`).join('')}</ul>
+      const card = document.createElement('div'); card.className = 'scorecard' + (d.ids.length > 8 ? ' long' : '');
+      card.innerHTML = `<p class="sc-k">The Bond Desk</p><p class="sc-big">${d.right}<span> of ${d.ids.length}</span></p><p class="sc-sub">calls right on the first try</p>
+        <ul>${d.ids.map((k) => `<li class="${S.calls[k] == null ? 'na' : S.calls[k] ? 'y' : 'n'}"><span aria-hidden="true">${S.calls[k] == null ? '·' : S.calls[k] ? '✓' : '✗'}</span>${esc(CALL_LABELS[k])}<span class="sr-only">${S.calls[k] == null ? ', not called' : S.calls[k] ? ', right' : ', missed'}</span></li>`).join('')}</ul>
         <p class="sc-line">${esc(d.line)}</p>`;
-      overlay.appendChild(card); describe(`Scorecard: ${d.right} of ${CALLS.length} calls right on the first try. ${d.line}`);
+      overlay.appendChild(card); describe(`Scorecard: ${d.right} of ${d.ids.length} calls right on the first try. ${d.line}`);
     } });
     renderTape();
-    con.innerHTML = `<p class="kicker">The game is over</p><h2 id="t">You called ${d.right} of ${CALLS.length}.</h2>
-      <p class="lead">${esc(d.line)}</p>
-      <p class="hint">A call counts only on your first try. Calls are not graded.</p>
-      <div class="actions"><button class="btn" type="button" id="shareBtn">Send this to a friend</button><span class="attempts" id="shareNote" aria-live="polite"></span></div>
-      <div class="coda"><p style="margin:0 0 6px">For class, two things are left.</p><p style="font:400 16px/1.55 var(--text);color:var(--fog);margin:0 0 14px">A short note on bonds or shares, then your receipt to upload.</p>
-      <button class="btn quiet" type="button" id="toNote">Write your note</button></div>`;
+    con.innerHTML = `<p class="kicker">The game is over</p><h2 id="t">You called ${d.right} of ${d.ids.length}.</h2>
+      ${speaker('boss', d.right >= d.ids.length - 1 ? 'You read this desk better than most people on it.' : d.right >= d.ids.length / 2 ? 'Not bad. The beam fooled you a few times.' : 'The market got you tonight. Play it again and see.')}
+      <div class="actions"><button class="btn" type="button" id="shareBtn">Send this to a friend</button>${S.friend ? '<button class="btn quiet" type="button" id="againBtn">Play again</button>' : ''}<span class="attempts" id="shareNote" aria-live="polite"></span></div>
+      ${S.friend ? '<p class="credit">Taking the class? Go back to the first screen and choose Play for class.</p>' : `<div class="coda"><p style="margin:0 0 6px">For class: a short note, then your receipt.</p><button class="btn quiet" type="button" id="toNote">Write your note</button></div>`}`;
     $('#shareBtn').addEventListener('click', async () => {
       const note = $('#shareNote');
       try { if (navigator.share) { await navigator.share({ title: 'The Bond Desk', text: d.text }); note.textContent = ''; return; } } catch (e) { if (e && e.name === 'AbortError') return; }
       try { await navigator.clipboard.writeText(d.text); note.textContent = 'Copied. Paste it into a text.'; } catch (e) { note.textContent = d.text; }
     });
-    $('#toNote').addEventListener('click', () => go('note'));
+    if ($('#toNote')) $('#toNote').addEventListener('click', () => go('note'));
+    if ($('#againBtn')) $('#againBtn').addEventListener('click', startFriend);
   }
 
   // ======================= receipt =======================
