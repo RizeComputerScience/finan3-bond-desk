@@ -331,6 +331,8 @@ fieldset.why { margin-top: 10px; } fieldset.why legend { font-weight: 600; color
 .btn:hover { box-shadow: 0 0 0 4px rgba(20, 35, 58, .15); }
 .btn.go { background: var(--gold); color: var(--ink); }
 .btn.quiet { background: transparent; color: var(--ink); border: 1.5px solid #8C9AAB; }
+.console a.btn { color: #fff; text-decoration: none; }   /* 2026-11-19: "Download your receipt" is a link; .console a's blue drew it dark blue on navy */
+.console .hint { color: var(--muted); }   /* 2026-11-19: the night palette's fog (#9DB0C2) is about 2:1 on the light page; the receipt's upload note sits here */
 .btn.small { font-size: 15px; padding: 8px 12px; min-height: 38px; }
 .fb { color: var(--ink); font-size: 16.5px; line-height: 1.5; }
 .fb.ok { border-left-color: var(--good); } .fb.bad { border-left-color: var(--bad); }
