@@ -284,3 +284,109 @@ footer { border-top: 1px solid var(--rule); color: var(--fog); font-size: 13px; 
 footer { padding: 10px 16px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* ============ Round three (2026-11-19): a lighter, friendlier desk. The picture stays at night on the left; the
+   question sits on a light page on the right, in large type, the same layout on every step. ============ */
+:root { --ink: #14233A; --ink2: #3F5168; --muted: #4A5B70; --page: #F1F4F7; --card: #FFFFFF; --edge: #CDD6E0; --gold: #E8A33D; --good: #1E7A46; --bad: #B3261E; }
+body { background: var(--page); }
+.top { background: var(--ink); border-bottom: 0; }
+.stage { background: radial-gradient(ellipse 55% 60% at 40% 34%, rgba(255, 180, 71, .08), transparent 70%), #1A2B42; }
+.world rect[fill="url(#gridP)"] { display: none; }
+.console { background: var(--page); color: var(--ink); border-left: 0; padding: 22px 30px 28px; font-size: 17px; }
+.console .kicker { color: var(--muted); font-size: 14px; margin-bottom: 4px; }
+.console h1, .console h2 { font: 700 30px/1.15 var(--text); color: var(--ink); letter-spacing: 0; margin: 0 0 8px; }
+.console h1 { font-size: 38px; }
+.console p { max-width: none; }
+.console .lead { font-size: 18px; }
+.console .scene { font-style: italic; color: var(--ink2); font-size: 17px; margin: 0 0 10px; }
+.console .ask { font-size: 18px; color: var(--ink); margin: 0 0 12px !important; line-height: 1.5; }
+.console .ask b, .console .scene b { color: var(--ink); }
+.console a { color: #1F5FA8; }
+.speaker { background: var(--card); border: 1px solid var(--edge); }
+.speaker .who { color: var(--muted); font-size: 13px; }
+.speaker .say { color: var(--ink); font-size: 17px; }
+.boxes { display: flex; flex-wrap: wrap; gap: 12px; margin: 4px 0 12px; }
+.nbox { background: var(--card); border: 2px solid var(--gold); border-radius: 10px; padding: 10px 12px; flex: 1 1 200px; }
+.nbox label { display: block; font-weight: 600; font-size: 15px; margin-bottom: 6px; }
+.inrow { display: flex; align-items: center; gap: 8px; }
+.nbox input { font: 600 22px/1 var(--text); color: var(--ink); background: #fff; border: 1.5px solid #8C9AAB; border-radius: 6px; padding: 8px 10px; width: 100%; min-width: 0; text-align: right; }
+.nbox input:focus { border-color: var(--ink); outline: 3px solid rgba(232, 163, 61, .5); outline-offset: 1px; }
+.nbox input.good { border-color: var(--good); } .nbox input.wrong { border-color: var(--bad); }
+.nbox .formula { margin: 6px 0 0 !important; font-size: 14.5px; color: var(--muted); }
+.mark { font: 700 20px/1 var(--text); min-width: 18px; }
+.mark.ok { color: var(--good); } .mark.no { color: var(--bad); }
+details.worked { border: 1.5px dashed #8C9AAB; border-radius: 10px; padding: 10px 12px; margin: 4px 0 12px; background: rgba(255, 255, 255, .5); }
+details.worked summary { cursor: pointer; font-weight: 600; font-size: 15.5px; color: var(--ink); }
+.wcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-top: 8px; }
+.wcard { background: var(--card); border: 1px solid var(--edge); border-radius: 8px; padding: 8px 10px; }
+.wcard p { margin: 0 !important; } .wl { font-size: 13px; color: var(--muted); } .wv { font: 700 20px/1.3 var(--text); color: var(--ink); } .wf { font-size: 13px; color: var(--muted); }
+.ticket { background: var(--card); border: 1.5px solid var(--edge); color: var(--ink); font-size: 16px; padding: 11px 13px; }
+.ticket:hover { border-color: #8C9AAB; }
+.ticket input { border-color: #6B7B8F; }
+.ticket input::before { background: var(--gold); }
+.ticket input:checked { border-color: var(--gold); }
+.ticket:has(input:checked) { border-color: var(--gold); background: #FFF6E6; }
+fieldset.why { margin-top: 10px; } fieldset.why legend { font-weight: 600; color: var(--ink); }
+.btn { background: var(--ink); color: #fff; font: 700 17px/1 var(--text); letter-spacing: 0; border-radius: 8px; padding: 13px 22px; min-height: 46px; }
+.btn:hover { box-shadow: 0 0 0 4px rgba(20, 35, 58, .15); }
+.btn.go { background: var(--gold); color: var(--ink); }
+.btn.quiet { background: transparent; color: var(--ink); border: 1.5px solid #8C9AAB; }
+.btn.small { font-size: 15px; padding: 8px 12px; min-height: 38px; }
+.fb { color: var(--ink); font-size: 16.5px; line-height: 1.5; }
+.fb.ok { border-left-color: var(--good); } .fb.bad { border-left-color: var(--bad); }
+.helpbox { background: #E3EAF1; color: var(--ink); }
+.pager { margin-top: 18px; } .pager button { color: var(--muted); }
+.plan { margin: 4px 0 14px; padding-left: 22px; font-size: 17px; } .plan li { margin: 3px 0; }
+.credit { color: var(--ink) !important; font-size: 16px !important; }
+.wc { color: var(--muted); }
+.ledger textarea { background: var(--card); color: var(--ink); border-color: #8C9AAB; }
+.ledger label { color: var(--ink); }
+.practice { background: #FFF6E6; border-left-color: var(--gold); color: var(--ink); }
+.points { color: var(--ink); } .points small { color: var(--muted); }
+.openlist li { border-color: var(--edge); }
+details.sources { color: var(--muted); } details.sources a { color: #1F5FA8; }
+/* progress bar: numbered circles, done ones ticked */
+.tape ol::before { background: #3E5573; bottom: 50%; }
+.notch { width: 30px; height: 30px; justify-content: center; }
+.notch span:first-child { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #9DB0C2; background: var(--ink); color: #E9EEF2; font: 700 12px/1 var(--text); position: relative; z-index: 1; }
+.notch.done span:first-child { background: var(--gold); border-color: var(--gold); color: var(--ink); }
+.notch[aria-current="step"] span:first-child { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(232, 163, 61, .45); color: #fff; }
+.notch .tick { display: none; }
+.stepname { margin: 2px 0 0; text-align: center; color: #C9D4DF; font-size: 13px; }
+footer { background: #E3EAF1; color: var(--ink2); border-top: 0; align-items: center; }
+footer .resume { margin: 0; color: var(--ink2); font-size: 13px; } footer .resume summary { cursor: pointer; }
+footer .resume form { display: inline-flex; gap: 8px; align-items: center; margin-left: 8px; } footer .resume label { display: inline; margin: 0; font-weight: 600; color: var(--ink2); }
+footer .resume input { font: 600 15px var(--text); width: 9.5em; padding: 6px 8px; background: #fff; color: var(--ink); border: 1px solid #8C9AAB; border-radius: 6px; }
+footer .code { color: var(--ink); font: 700 1em var(--text); letter-spacing: .04em; }
+.err { color: var(--bad); }
+@media (max-width: 900px) {
+  .console { padding: 14px 16px 24px; border-top: 0; }
+  .console h2 { display: block; font-size: 24px; }
+  .console .kicker { display: block; }
+  .console .scene, .console .ask { font-size: 16.5px; }
+  .notch { width: 26px; height: 28px; } .notch span:first-child { width: 23px; height: 23px; font-size: 11px; }
+  .stepname { display: none; }
+  .nbox { flex-basis: 100%; }
+  footer { font-size: 12px; }
+}
+/* fit a calculation step at 1280 x 720: boxes side by side, compact example, a slimmer footer */
+@media (min-width: 901px) {
+  main { grid-template-columns: minmax(0, 1fr) 480px; }
+  .console { padding: 16px 26px 20px; }
+  .console h1 { font-size: 34px; } .console h2 { font-size: 26px; margin-bottom: 4px; }
+  .console .scene { font-size: 16px; margin-bottom: 6px; line-height: 1.45; }
+  .console .ask { font-size: 17px; margin-bottom: 10px !important; line-height: 1.45; }
+  .boxes { flex-wrap: nowrap; gap: 10px; margin-bottom: 10px; }
+  .nbox { flex: 1 1 0; padding: 8px 10px; }
+  .nbox input { font-size: 20px; padding: 6px 8px; }
+  .nbox .formula { font-size: 13.5px; margin-top: 4px !important; }
+  details.worked { padding: 8px 10px; margin-bottom: 10px; }
+  details.worked summary { font-size: 14.5px; }
+  .wcards { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px; margin-top: 6px; }
+  .wcard { padding: 6px 8px; } .wv { font-size: 18px; }
+  .actions { margin: 8px 0 4px; }
+  .ticket { padding: 9px 12px; font-size: 15.5px; }
+  footer { padding: 6px 24px; font-size: 12.5px; }
+  .pager { margin-top: 10px; }
+}
+@media (min-width: 1200px) { main { grid-template-columns: minmax(0, 1fr) 510px; } }

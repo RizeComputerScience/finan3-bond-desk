@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Bond Desk</title>
-<meta name="description" content="Financial Markets and Institutions, Unit 4. Pull the yield on a bond beam, replay 2022, read quotes, estimate losses with duration and read spreads at Great Lakes Community Bank.">
+<meta name="description" content="Financial Markets and Institutions, Unit 4. Practise reading bond quotes, duration and spreads at Great Lakes Community Bank.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230A1524'/%3E%3Cpath d='M5 13 L27 19' stroke='%23FFB447' stroke-width='3' stroke-linecap='round'/%3E%3Cpath d='M16 16 L12 26 H20 Z' fill='%23E9EEF2'/%3E%3C/svg%3E">
 <link rel="preload" href="fonts/big-shoulders-display-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -14,9 +14,8 @@
 <a class="skip" href="#console">Skip to the step</a>
 <header class="top">
   <div class="brand"><span class="name">The Bond Desk</span><span class="sub">Great Lakes Community Bank</span></div>
-  <nav class="tape" aria-label="Steps"><ol id="tape"></ol></nav>
+  <nav class="tape" aria-label="Steps"><ol id="tape"></ol><p class="stepname" id="stepName" aria-hidden="true"></p></nav>
   <div class="tools">
-    <span class="calls" id="callsBadge" hidden aria-live="polite"></span>
     <a class="tool desmos-open" id="calcBtn" href="https://www.desmos.com/scientific" target="desmos" rel="noopener"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="1" width="12" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 5h6M5 8.5h1.5M9.5 8.5H11M5 11.5h1.5M9.5 11.5H11" stroke="currentColor" stroke-width="1.5"/></svg><span class="lbl">Desmos calculator</span><span class="sr-only"> (opens in a new window)</span></a>
     <button class="tool" id="soundBtn" type="button" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6h3l4-3v10L5 10H2z" fill="currentColor"/><path id="soundWaves" d="M11 5.5c1 1.4 1 3.6 0 5M13 3.5c2 2.6 2 6.4 0 9" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".35"/></svg><span class="lbl" id="soundLbl">Sound off</span></button>
   </div>
@@ -31,7 +30,9 @@
   </section>
   <section class="console" id="console" tabindex="-1" aria-label="Step"></section>
 </main>
-<footer><span>Financial Markets and Institutions, Unit 4. Your progress is saved in this browser.</span><span id="codeNote"></span></footer>
+<footer><span>Financial Markets and Institutions, Unit 4. Your progress is saved in this browser. <span id="codeNote"></span></span>
+  <details class="resume" id="resume"><summary>Have a desk code from another computer?</summary>
+    <form id="codeForm" novalidate><label for="dc">Your desk code</label> <input type="text" id="dc" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD-2345"> <button class="btn quiet small" type="submit">Continue</button><span class="err" id="startErr" role="alert"></span></form></details></footer>
 <script>window.DESK_NO_UI = true;</script>
 <script src="config.js"></script>
 <script src="desk-engine.js"></script>

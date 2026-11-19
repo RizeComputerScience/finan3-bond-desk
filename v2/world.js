@@ -85,20 +85,13 @@
   const PR = { before: 44, low: 30.25, lowRounded: 30, late: 37.5 };
 
 
-  // ---------------- round two: what the player sets or chooses (bond.js builds its controls from these) ----------------
-  // Each list holds the right value and the slips version 1's judge diagnoses; duplicates of the right value are dropped.
-  const uniq = (list) => { const seen = new Set(); return list.filter(([v]) => { const k = Math.round(v * 1e6); if (seen.has(k)) return false; seen.add(k); return true; }); };
-  const durDollarOptions = (t) => { const p = t.D * t.dy / 100; return uniq([[t.A * p, 'right'], [t.A * t.D * t.dy, 'nopct'], [t.A - t.A * p, 'left'], [t.A * (t.D + t.dy) / 100, 'plus'], [t.A * t.D / 100, 'dur']]).slice(0, 4); };
-  const bridgePctOptions = (t) => uniq([[t.D * t.dy, 'right'], [t.D + t.dy, 'plus'], [t.D, 'dur'], [t.dy, 'rise'], [t.D * t.dy * 2, 'double']]).slice(0, 4);
-  const prPctOptions = (t) => uniq([[t.cents / t.p0, 'right'], [t.cents / t.p1, 'base'], [t.cents / 100, 'hundred'], [t.p1 / t.p0, 'ratio']]);
-  const SETTERS = { quote: { min: 880, max: 1080, step: 2.5 }, dur1: { min: 0, max: 20, step: 0.5 }, spread: { min: 0, max: 450, step: 5 } };
-  const reachable = (id, v) => { const s = SETTERS[id]; const k = (v - s.min) / s.step; return v >= s.min - 1e-9 && v <= s.max + 1e-9 && Math.abs(k - Math.round(k)) < 1e-9; };
-  // Friend mode's bank call is a guess with no arithmetic: right if within a quarter of the true loss.
-  const friendClose = (guess, loss) => Math.abs(guess - loss) <= 0.25 * loss;
+  // ---------------- round three: the worked examples' numbers (from Reading a Bond's Numbers), which must never be a
+  // player's own answer. Duration falls back to 7 × 0.5 when a desk's own percent would be 16%.
+  const EXAMPLES = { quote: 102.25, spreadBps: 200, durPct: 16, durFallbackPct: 3.5, prPct: 0.25, bridgeLoss: 0.4 };
 
   // Quiz options in the same shuffled order as version 1's engine (a hash of the question and the option index).
   const optOrder = (q) => { const hs = (s) => { let x = 2166136261; for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 16777619) >>> 0; } return x; }; return q.options.map((_, j) => j).sort((a, b) => hs(q.q + '|' + a) - hs(q.q + '|' + b)); };
 
   root.WORLD = { P, modDur, BEAM, leverDropPct, beamTan, SEESAW_BONDS, seesawPrice, snapYield, seesawEntry, DUR_BONDS,
-    gaugeValue, gaugeLoss, FED_2022, T22, dayIndex, rangeOn, DKS, semiPrice, dicksPath, dicksOn, DRAGOVIA, yieldAt, PR, optOrder, durDollarOptions, bridgePctOptions, prPctOptions, SETTERS, reachable, friendClose };
+    gaugeValue, gaugeLoss, FED_2022, T22, dayIndex, rangeOn, DKS, semiPrice, dicksPath, dicksOn, DRAGOVIA, yieldAt, PR, optOrder, EXAMPLES };
 })(typeof window !== 'undefined' ? window : globalThis);

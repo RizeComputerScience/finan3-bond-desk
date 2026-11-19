@@ -41,7 +41,7 @@
         'The coupon is fixed, but the price is not. A buyer compares $30 a year with the $50 a new bond pays.',
         'Your bank gets $1,000 back at maturity, but the bond is worth less today. If the bank sells it now, it sells for less.'] },
     { title: 'Which loses most?',
-      q: 'Rates rise 1 point. Which bond’s price falls the most?',
+      q: 'Rates rise 1 percentage point. Which bond’s price falls the most?',
       options: ['A 30-year bond with duration 17', 'A 10-year bond with duration 8', 'A 2-year bond with duration 2', 'All three fall the same, because rates rose by the same amount'],
       answer: 0,
       why: ['Right. Duration 17 means about 17% off the price, against about 8% and 2% for the others. That is the 30-year bond you watched on the beam.',
@@ -107,7 +107,7 @@
   const mm = (x) => (Math.abs(x - Math.round(x)) < 1e-9 ? H().money(x) : H().money(x, 2));
   const SHOW = {
     pct: pc, money: mm, text: (v) => String(v),
-    pts: (v) => fix(v) + ' points', bps: (v) => fix(v, 0) + ' basis points', cents: (v) => fix(v) + ' cents', bil: (v) => '$' + fix(v) + ' billion',
+    pts: (v) => fix(v) + ' percentage points', bps: (v) => fix(v, 0) + ' basis points', cents: (v) => fix(v), bil: (v) => '$' + fix(v) + ' billion',
   };
   // A percent typed as 7.5%, 7.5 or 0.075 all mean 7.5%. Every percent answer on this desk is at least 1.5%.
   const pctIn = (h, s) => { const v = h.parseMoney(s); if (!isFinite(v)) return v; return (!/%/.test(String(s)) && Math.abs(v) >= 1) ? v / 100 : v; };
@@ -123,7 +123,7 @@
   const TOL = { pct: () => 0.0006, money: (v) => Math.max(2, 0.003 * Math.abs(v)), pts: () => 0.006, bps: () => 0.6, cents: () => 0.06, bil: (v) => Math.max(0.006, 0.003 * Math.abs(v)) };
   const PLACEHOLDER_FMT = { pct: 'pct', money: 'money', pts: 'num', bps: 'num', cents: 'num', bil: 'num' };
   const UNREADABLE = { pct: 'Type a percentage, like 7.5%.', money: 'Type a dollar amount, like 150,000.', pts: 'Type the number of percentage points, like 1.25.',
-    bps: 'Type a whole number of basis points, like 125.', cents: 'Type the number of cents, like 20.', bil: 'Type the loss in billions of dollars, like 1.2.' };
+    bps: 'Type a whole number of basis points, like 125.', cents: 'Type the fall in the quote, like 20.', bil: 'Type the loss in billions of dollars, like 1.2.' };
 
   // One function per task draws both the worked example and the student's table, so the two always match (rule 29).
   // A line: { label, calc, num (the right value), kind, input }.
@@ -132,7 +132,7 @@
       { label: 'Quote', calc: 'a percent of the $1,000 face value', num: p2d(q).replace('%', ''), kind: 'text' },
       { label: 'Price of one bond', calc: `${p2d(q)} × $1,000`, num: q * 10, kind: 'money', input: true }],
     dur: (D, dy, A, faded) => [
-      { label: 'Price falls by', calc: faded ? `${D} × ${fix(dy)} ${dy === 1 ? "point" : "points"}` : 'duration × rise in rates', num: D * dy / 100, kind: 'pct', input: true },
+      { label: 'Price falls by', calc: faded ? `${D} × ${fix(dy)} ${dy === 1 ? "percentage point" : "percentage points"}` : 'duration × rise in rates', num: D * dy / 100, kind: 'pct', input: true },
       { label: 'Dollars lost', calc: faded ? `price fall × ${mm(A)}` : 'price fall × amount held', num: A * D * dy / 100, kind: 'money', input: true }],
     bridge: (A, D, dy) => [
       { label: 'Price falls by', calc: 'duration × rise in rates', num: D * dy / 100, kind: 'pct', input: true },
@@ -250,7 +250,7 @@
     if (t.id === 'spread' && l.kind === 'bps') D.push([t.pts, 'pts', 'That is the spread in percentage points. One point is 100 basis points, so multiply by 100.'], [t.pts * 10, 'ten', 'Multiply by 100, not 10: one point is 100 basis points.'], [-t.bps, 'flip', 'The spread is positive: the company pays more than the Treasury.']);
     if (t.id === 'pr' && l.kind === 'cents') D.push([t.p0 + t.p1, 'plus', `Subtract: ${t.p0} − ${t.p1}.`], [t.p1 - t.p0, 'flip', `Take the starting price minus the new one: ${t.p0} − ${t.p1}.`]);
     if (t.id === 'pr' && l.kind === 'pct') D.push([t.cents / t.p1, 'base', `Divide by the starting price, ${t.p0}, not the new price.`], [t.p1 / t.p0, 'ratio', `That is how much is left. The fall is ${t.cents} ÷ ${t.p0}.`],
-      [t.cents / 100, 'hundred', `Divide by the starting price, ${t.p0} cents, not by 100.`]);
+      [t.cents / 100, 'hundred', `Divide by the starting price, ${t.p0}, not by 100.`]);
     return D;
   }
   const plain = (s) => String(s).replace(/<[^>]+>/g, '');
@@ -302,7 +302,7 @@
     const h = H();
     if (t.id === 'quote') return `A quote of ${p2d(t.q).replace('%', '')} means ${p2d(t.q)} of face value: ${h.money(t.answer, 2)} for one bond.${t.q > 100 ? ' This one sells above its face value.' : ''}`;
     if (t.id === 'seesaw') return `The yield rose and both prices fell. The 30-year bond lost ${h.money(1000 - t.p30)}; the 2-year bond lost only ${h.money(1000 - t.p2)}. The longer the bond, the further its price swings.`;
-    if (t.id === 'dur1') return `A ${fix(t.dy)}-point rise takes about ${pc(t.pct)} off a duration-${t.D} bond: about ${mm(t.answer)} on ${mm(t.A)}.`;
+    if (t.id === 'dur1') return `A ${fix(t.dy)}-percentage-point rise takes about ${pc(t.pct)} off a duration-${t.D} bond: about ${mm(t.answer)} on ${mm(t.A)}.`;
     if (t.id === 'spread') return `Lenders want ${t.bps} basis points more from the company than from the government, as pay for the risk of not being repaid.`;
     if (t.id === 'pr') return `At its low, a fall of about ${Math.round(t.answer * 100)}% in a day, and the bond still ended the day well below ${t.p0}. Nothing about its coupon changed. Lenders expected to get back less.`;
     if (t.id === 'bridge') return `The bonds lost about $${fix(t.answer)} billion, and no borrower missed a payment. In Unit 5 you meet a real bank that made this bet: Silicon Valley Bank. At the end of 2022, its long-term bonds had a duration of about 6.`;
@@ -322,7 +322,7 @@
   root.DESK = {
     app: 'finan3-w04-bond-desk', version: 1, seedVersion: 1, salt: 'rize-finan3-w04-bond:82b268', points: 60,
     storageKey: 'rize-finan3-w04-bond-v1', filePrefix: 'BondDesk',
-    verifyUrl: 'https://rizecomputerscience.github.io/finan3-bond-desk/verify.html',
+    verifyUrl: 'https://rizecomputerscience.github.io/finan3-bond-desk/v2/verify.html',   // v2 (2026-11-19): the receipt prints the v2 checker
     calcPlaceholder: '0.075*2000000',
     calcHint: '',
     story: { title: 'The Bond Desk', kicker: 'Financial Markets and Institutions, Unit 4', company: 'Great Lakes Community Bank', team: 'Bond Desk',
