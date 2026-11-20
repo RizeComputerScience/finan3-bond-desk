@@ -19,9 +19,10 @@
   const money = (x, dp) => h.money(x, dp);
   const mm = (x) => (Math.abs(x - Math.round(x)) < 1e-9 ? money(x) : money(x, 2));
   const signed = (x) => (Math.round(x) === 0 ? '$0' : (x > 0 ? '+' : '') + money(x));
-  const SHOW = { pct: (v) => fix(v * 100, 2) + '%', money: mm, pts: (v) => fix(v) + ' percentage points', bps: (v) => fix(v, 0) + ' basis points', cents: (v) => fix(v), bil: (v) => '$' + fix(v) + ' billion', text: (v) => String(v) };
+  const ppts = (x) => fix(x) + (Math.abs(Number(x) - 1) < 1e-9 ? ' percentage point' : ' percentage points');   // 2026-11-19: never "1 percentage points"
+  const SHOW = { pct: (v) => fix(v * 100, 2) + '%', money: mm, pts: (v) => ppts(v), bps: (v) => fix(v, 0) + ' basis points', cents: (v) => fix(v), bil: (v) => '$' + fix(v) + ' billion', text: (v) => String(v) };
   const PH = { pct: '0.0%', money: '$0', pts: '0.00', bps: '0', cents: '0', bil: '0.0' };
-  const UNIT = { pct: '', money: '', pts: 'points', bps: 'basis points', cents: 'cents', bil: 'billion' };
+  const UNIT = { pct: '', money: '', pts: 'points', bps: 'basis points', cents: '', bil: 'billion' };
   const words = (s) => (String(s || '').trim().match(/\S+/g) || []).length;
 
   // ======================= sound (off by default; short synthesized cues) =======================
@@ -241,7 +242,7 @@
       for (const k in tokG) { const t = tokG[k]; const d = t.tk.d * u; t.x = px + d * cs + 6 * sn; t.y = py + d * sn - 6 * cs; t.g.setAttribute('transform', `translate(${t.x.toFixed(2)} ${t.y.toFixed(2)})`); if (t.tag) t.tag.frame(dt); }
       const lx = px - armL * cs, ly = py - armL * sn;
       if (hit) { hit.setAttribute('transform', `translate(${lx.toFixed(2)} ${ly.toFixed(2)})`); ring.setAttribute('r', hinting && !RM ? 22 + 5 * Math.abs(Math.sin(t0 * 2.6)) : 22); }
-      if (readout) { readout.at(lx, ly - (o.handle ? 40 : 26)); readout.frame(dt); if (B._riseCap) { B._riseCap.setAttribute('x', lx); B._riseCap.setAttribute('y', ly - (geo.narrow ? 46 : 54)); B._riseCap.textContent = 'rates up, percentage points'; } }
+      if (readout) { readout.at(lx, ly - (o.handle ? 40 : 26)); readout.frame(dt); if (B._riseCap) { B._riseCap.setAttribute('x', lx); B._riseCap.setAttribute('y', ly - (geo.narrow ? 46 : 54)); if (geo.narrow) B._riseCap.innerHTML = `<tspan x="${lx}" dy="-14">rates up,</tspan><tspan x="${lx}" dy="14">percentage points</tspan>`; else B._riseCap.textContent = 'rates up, percentage points'; }   /* 2026-11-19: two lines on a phone, where one ran under the bond card */ }
       // drop annotations: a level line at the pivot's height, a bracket beside the bond, and the arithmetic under the beam
       annoG.innerHTML = '';
       for (const id in B.annos) {
@@ -264,12 +265,13 @@
     Dl.st.x = ang(Dl.i);
     Dl.build = (parent, cx, cy, R) => {
       geo = { cx, cy, R }; g = E('g', { class: 'dial' + (Dl.enabled ? '' : ' disabled') }, parent); ticks = [];
+      const labG = E('g', {}, parent);   // 2026-11-19: the +0, +1, +2 labels stay readable while the dial is locked (the locked dial is dimmed to .35)
       E('circle', { cx, cy, r: R + 14, fill: '#0E1B2D', stroke: '#2B425C', 'stroke-width': 1 }, g);
       for (let i = 0; i < o.n; i++) {
         const a = ang(i) * Math.PI / 180, big = o.major ? o.major(i) : true;
         const l = E('line', { x1: cx + Math.sin(a) * (R + 4), y1: cy - Math.cos(a) * (R + 4), x2: cx + Math.sin(a) * (R + (big ? 12 : 8)), y2: cy - Math.cos(a) * (R + (big ? 12 : 8)), stroke: '#4A6580', 'stroke-width': big ? 2 : 1 }, g);
         ticks.push(l);
-        const lab = o.label && o.label(i); if (lab) T(g, cx + Math.sin(a) * (R + 26), cy - Math.cos(a) * (R + 26) + 4, lab, { 'text-anchor': 'middle', class: 'fog', style: `font-size:${o.labelSize || 11}px` });
+        const lab = o.label && o.label(i); if (lab) T(labG, cx + Math.sin(a) * (R + 26), cy - Math.cos(a) * (R + 26) + 4, lab, { 'text-anchor': 'middle', class: 'fog', style: `font-size:${o.labelSize || 11}px` });
       }
       hitEl = E('g', { class: 'grab', tabindex: Dl.enabled ? '0' : '-1', role: 'slider', 'aria-label': o.aria, 'aria-valuemin': 0, 'aria-valuemax': o.n - 1 }, g);
       E('circle', { class: 'focusring', cx, cy, r: R + 4, fill: 'none', stroke: '#FFB447', 'stroke-width': 2 }, hitEl);
@@ -643,7 +645,7 @@
     const beam = Beam({ tokens: [{ id: 'b', d: t.D, label: mm(t.A), sub: 'duration ' + t.D, wide: true }], riseLabel: true, scale: true, dy: 0 });
     function apply() {
       beam.anno('b', [{ text: got[0] ? `${t.D} × ${fix(t.dy)} = ${fix(t.D * t.dy)}%` : `${t.D} × ${fix(t.dy)} = ?%`, cls: 'coral', big: true }, { text: got[1] ? `${mm(t.A * t.D * t.dy / 100)} lost` : '$? lost', cls: '' }]);
-      describe(`A bond with duration ${t.D} sits ${t.D} marks from the pivot. Rates rise ${fix(t.dy)} percentage points and the beam tips. ${got[0] ? `Its price falls about ${fix(t.D * t.dy)}%.` : ''}`);
+      describe(`A bond with duration ${t.D} sits ${t.D} marks from the pivot. Rates rise ${ppts(t.dy)} and the beam tips. ${got[0] ? `Its price falls about ${fix(t.D * t.dy)}%.` : ''}`);
     }
     return {
       reveal(rr) { if (rr[0] && rr[0].ok) got[0] = true; if (rr[1] && rr[1].ok) got[1] = true; apply(); },
@@ -768,7 +770,7 @@
         T(g, gy.x0, gy.y0 - 4, 'Yields', { class: 'fog', style: 'font-size:11px' });
         T(g, X(1), Yv(4) + 13, 'Treasury', { 'text-anchor': 'end', style: 'font-size:11px' });
         T(g, X(1), Yv(dragY(1)) - 5, 'Dragovia', { 'text-anchor': 'end', class: 'sod', style: 'font-size:11px' });
-        if (shown.x > 0.05) T(g, X(0.76), (Yv(4) + Yv(dragY(1))) / 2 + 4, `spread ${Math.round((dragY(1) - 4) * 100)} basis points`, { 'text-anchor': 'middle', style: `font-size:${geo.n ? 11 : 13}px` });
+        if (shown.x > 0.05) T(g, X(0.76), (Yv(4) + Yv(dragY(1))) / 2 + 4, `spread ${Math.round((Math.min(dragY(1), yAfter) - 4) * 100)} basis points`, { 'text-anchor': 'middle', style: `font-size:${geo.n ? 11 : 13}px` });
       },
     };
     return sc;
@@ -780,7 +782,7 @@
     function apply() {
       const c = mode === 'example' ? { a: 80, b: 60, ok: [true, true], who: 'Worked example', la: 'Before', lb: 'After' } : { a: 44, b: 30, ok: got, who: 'Puerto Rico’s bond, its quote', la: 'October 3', lb: 'October 4, at its low' };
       tgt = { a: c.a, b: c.b }; this._c = c; if (setSw) setSw(mode);
-      describe(`${c.who}: ${c.a}, then ${c.b}. ${c.ok[0] ? `A fall of ${c.a - c.b} cents` : 'The fall is not filled in yet'}${c.ok[1] ? `, about ${fix(100 * (c.a - c.b) / c.a, 1)}%` : ''}.`);
+      describe(`${c.who}: ${c.a}, then ${c.b}. ${c.ok[0] ? `A fall of ${c.a - c.b} in the quote` : 'The fall is not filled in yet'}${c.ok[1] ? `, about ${fix(100 * (c.a - c.b) / c.a, 1)}%` : ''}.`);
     }
     const sc = {
       show(m) { mode = m; apply.call(sc); },
@@ -821,7 +823,7 @@
     const ex = { A: 4, D: 5, dy: 2 };
     const steps = Math.round(t.dy / 0.25);
     const dial = Dial({ n: steps + 1, i: 0, from: -120, to: 120, enabled: ready, aria: 'Fed rate dial', major: (i) => i % 4 === 0, label: (i) => (i % 4 === 0 ? '+' + i / 4 : ''), labelSize: 12,
-      valueText: (i) => `Rates up ${fix(i * 0.25)} percentage points`, onChange: (i) => { beam.setRise(i * 0.25); hooks.onDial(i * 0.25); } });
+      valueText: (i) => `Rates up ${ppts(i * 0.25)}`, onChange: (i) => { beam.setRise(i * 0.25); hooks.onDial(i * 0.25); } });
     const beam = Beam({ tokens: [{ id: 'blk', d: t.D, label: `$${t.A} billion`, sub: `duration ${t.D}`, kind: 'block' }], riseLabel: true, scale: true });
     let G, gauge = { lvl: { x: 1, v: 0 } }, geo, valOdo, lossOdo;
     let armed = null, guessing = false, gset = null; // the loss the player typed or dragged, in billions: the mark the gauge is tested against
@@ -870,14 +872,14 @@
         E('path', { d, fill: 'url(#liquidG)', 'clip-path': null }, g);
         for (let k = 0; k <= 6; k++) { const f = 1 - k * 0.05, yy = Ys(f); E('line', { x1: x + w, x2: x + w + 6, y1: yy, y2: yy, stroke: '#4A6580' }, g); if (!n) T(g, x + w + 9, yy + 4, `${100 - k * 5}%`, { class: 'fog', style: 'font-size:10.5px' }); }
         T(g, x + w, y - (n ? 30 : 46), 'Value of the bonds', { 'text-anchor': 'end', class: 'fog', style: `font-size:${n ? 11 : 13}px` });
-        if (c.mark != null && isFinite(c.mark)) { const my = Math.max(y - 8, Math.min(y + gh + 8, Ys(1 - c.mark / c.A))); E('line', { x1: x - (n ? 10 : 18), x2: x + w + 6, y1: my, y2: my, stroke: '#E9EEF2', 'stroke-width': 2, 'stroke-dasharray': '5 3' }, g); T(g, x - (n ? 12 : 22), my - 6, mode === 'example' ? 'the rule' : S.friend ? 'your guess' : 'your answer', { 'text-anchor': 'end', style: `font-size:${n ? 10.5 : 12.5}px` }); }
+        if (c.mark != null && isFinite(c.mark)) { const my = Math.max(y - 8, Math.min(y + gh + 8, Ys(1 - c.mark / c.A))); E('line', { x1: x - (n ? 10 : 18), x2: x + w + 6, y1: my, y2: my, stroke: '#E9EEF2', 'stroke-width': 2, 'stroke-dasharray': '5 3' }, g); T(g, x - (n ? 12 : 22), my - 6, mode === 'example' ? 'the rule' : S.friend ? 'your guess' : 'your answer', { 'text-anchor': 'end', style: `font-size:${n ? 10.5 : 12.5}px; paint-order: stroke; stroke: #1A2B42; stroke-width: 4px; stroke-linejoin: round` }); }   /* 2026-11-19: a halo, so the label stays readable where it crosses the beam scale */
         valOdo.set('$' + (c.A * frac).toFixed(2) + 'B'); lossOdo.set('−$' + (c.A * (1 - frac)).toFixed(2) + 'B'); valOdo.frame(dt); lossOdo.frame(dt);
         if (mode === 'mine' && ready && dial.i === steps && Math.abs(gauge.lvl.x - frac) < 0.0015 && !landed) { landed = true; Sound.thud(); if (L.done) hooks.onLanded(); else hooks.onMiss(armed); }
         this._final.textContent = landed && mode === 'mine' && L.done ? `The bonds lost $${fix(t.answer)} billion, and no borrower missed a payment.` : '';
         if (n) this._final.textContent = landed && mode === 'mine' && L.done ? `The bonds lost $${fix(t.answer)} billion.` : '';
-        this._dialHint.textContent = mode === 'mine' ? (ready ? (dial.i < steps ? `Turn it up to +${fix(t.dy)}` : `Rates up ${fix(t.dy)} percentage points`) : (S.friend ? 'Lock in your guess first' : 'Check your answer to unlock it')) : '';
+        this._dialHint.textContent = mode === 'mine' ? (ready ? (dial.i < steps ? `Turn it up to +${fix(t.dy)}` : `Rates up ${ppts(t.dy)}`) : (S.friend ? 'Lock in your guess first' : 'Check your answer to unlock it')) : '';
         if (this._gh) this._gh.setAttribute('transform', `translate(${x} ${(y + gh * (armed / t.A) / 0.3).toFixed(1)})`);
-        describe(`${c.who}: $${c.A} billion of bonds with duration ${c.D}. Rates up ${fix(c.r)} percentage points. Value about $${(c.A * frac).toFixed(2)} billion.`);
+        describe(`${c.who}: $${c.A} billion of bonds with duration ${c.D}. Rates up ${ppts(c.r)}. Value about $${(c.A * frac).toFixed(2)} billion.`);
       },
     };
     return sc;
@@ -904,7 +906,7 @@
     if (s.id === 'q1') {
       const sc = sceneReplay(s, { onDial: () => {} }, true); mount(sc);
       screen(s, { scene: 'In Unit 3 you followed the Fed through 2022. The yield curve is inverted when the 2-year rate sits above the 10-year.',
-        ask: 'Your Fed Brief packet showed the 2-year Treasury rate going from 0.78% to 4.41% during 2022, and the 10-year from 1.63% to 3.88%. Which rose more, and what shape did that leave the yield curve in at the end of the year?', body: quizHtml(s) });
+        ask: 'The 2022 Rates and How to Read Them showed the 2-year Treasury rate going from 0.78% to 4.41% during 2022, and the 10-year from 1.63% to 3.88%. Which rose more, and what shape did that leave the yield curve in at the end of the year?', body: quizHtml(s) });
       wireQuiz(s); return;
     }
     if (s.id === 'quote') {
@@ -973,12 +975,12 @@
     if (s.id === 'bridge') {
       const W_bridge = { 0: ['Percent the price falls', 'duration × rise in rates'], 1: ['Loss, in billions of dollars', 'percent fall × what the bonds were worth'] };
       let sc; const parseBil = (v) => { const x = h.parseMoney(String(v == null ? '' : v).replace(/\s*(billions?|bn|b)\s*$/i, '')); return isFinite(x) && Math.abs(x) >= 1e5 ? x / 1e9 : x; };
-      sc = sceneBridge(s, { onDial: () => {}, onLanded: () => { fb(`<b>The gauge landed on your number.</b> The bonds lost about $${fix(t.answer)} billion, and no borrower missed a payment. <b>In Unit 5 you meet that bank: Silicon Valley Bank.</b> At the end of 2022, its long-term bonds had a duration of about 6.`, true); showNext(); },
+      sc = sceneBridge(s, { onDial: () => {}, onLanded: () => { fb(`<b>The gauge landed on your number.</b> The bonds lost about $${fix(t.answer)} billion, and no borrower missed a payment. <b>In Unit 5 you meet a real bank that made this bet: Silicon Valley Bank.</b> At the end of 2022, its long-term bonds had a duration of about 6.`, true); showNext(); },
         onMiss: (v) => fb(`<b>Off your mark.</b> The gauge stopped at a loss of about $${fix(t.answer)} billion; your answer said $${fix(v)} billion. Check the two lines and try again.`, false) });
       mount(sc);
-      screen(s, { scene: 'The same calculation as the Duration step, with a bank’s numbers.', ask: `In 2021, a bank put <b>$${t.A} billion</b> of its depositors’ money into bonds with duration <b>${t.D}</b>. Then rates rose <b>${fix(t.dy)}</b> percentage points. About how much did the bonds lose?`,
+      screen(s, { scene: 'The same calculation as the Duration step, with a bank’s numbers.', ask: `In 2021, a bank put <b>$${t.A} billion</b> of its depositors’ money into bonds with duration <b>${t.D}</b>. Then rates rose <b>${fix(t.dy)}</b> percentage ${t.dy === 1 ? 'point' : 'points'}. About how much did the bonds lose?`,
         body: boxesHtml(C.linesFor(t), L.rows, W_bridge), example: EX.bridge, hint: hintFor(t) });
-      wireRows(s, { words: W_bridge, praise: () => `About $${fix(t.answer)} billion. Now turn the Fed’s dial on the left up ${fix(t.dy)} percentage points and watch the gauge drain.`, onDone: () => { $('#nextRow').hidden = true; sc.unlock(); },
+      wireRows(s, { words: W_bridge, praise: () => `About $${fix(t.answer)} billion. Now turn the Fed’s dial on the left up ${ppts(t.dy)} and watch the gauge drain.`, onDone: () => { $('#nextRow').hidden = true; sc.unlock(); },
         onMiss: (rows) => { const v = parseBil(rows[1]); if (isFinite(v) && v > 0) { sc.arm(v); fb($('#fb').innerHTML + ' You can also turn the Fed’s dial to test your number on the gauge.', false); } } });
       if (L.done) { sc.unlock(); showNext(); }
       return;

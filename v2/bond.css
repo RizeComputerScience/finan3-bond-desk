@@ -85,7 +85,7 @@ main:focus { outline: none; }
 .world .tappable, .world .tappable *, .world .grab, .world .grab * { pointer-events: auto; }
 .world .tappable { cursor: pointer; }
 .world .focusring { opacity: 0; transition: opacity .15s; }
-.world g:focus-visible > .focusring, .world g.sel > .focusring { opacity: 1; }
+.world g:focus-visible .focusring, .world g.sel > .focusring { opacity: 1; }   /* 2026-11-19: descendant, so the bond cards' ring (inside g.cert) shows */
 .world .grab { cursor: grab; }
 .world .grab:active { cursor: grabbing; }
 .world .disabled { opacity: .35; }
@@ -200,7 +200,7 @@ details.sources a { color: var(--fog); }
 .stageledger div { padding: 14px 18px; border-bottom: 1px solid var(--engrave); font-size: 15px; color: var(--chalk); overflow: hidden; }
 .stageledger div:nth-of-type(odd) { border-right: 2px solid var(--chalk); }
 .stageledger div i { display: block; font-style: normal; color: var(--fog); font-size: 13px; margin-bottom: 4px; }
-.stageledger div em { color: #6F849A; }
+.stageledger div em { color: var(--fog); }   /* 2026-11-19: was #6F849A, 3.6:1 on the stage */
 
 .scorecard { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(92%, 520px); padding: 26px 30px 24px; background: linear-gradient(160deg, #16263A, #0E1B2D); border: 1px solid rgba(255, 180, 71, .45); border-radius: 14px; box-shadow: 0 30px 80px rgba(0, 0, 0, .6), 0 0 60px rgba(255, 180, 71, .08); }
 .scorecard p { margin: 0; }
@@ -333,6 +333,10 @@ fieldset.why { margin-top: 10px; } fieldset.why legend { font-weight: 600; color
 .btn.quiet { background: transparent; color: var(--ink); border: 1.5px solid #8C9AAB; }
 .console a.btn { color: #fff; text-decoration: none; }   /* 2026-11-19: "Download your receipt" is a link; .console a's blue drew it dark blue on navy */
 .console .hint { color: var(--muted); }   /* 2026-11-19: the night palette's fog (#9DB0C2) is about 2:1 on the light page; the receipt's upload note sits here */
+/* 2026-11-19 (accessibility audit): the sodium ring (#FFB447) is 1.6:1 on the light page. On the light surfaces the ring is a dark
+   gold, 5.4:1 on the page and 5.9:1 on white; the dark top bar and the stage keep the sodium ring. */
+.console :focus-visible, footer :focus-visible, .console .ticket input:focus-visible { outline: 2px solid #8A5A00; outline-offset: 3px; }
+.nbox input:focus { outline: 3px solid #8A5A00; outline-offset: 1px; }
 .btn.small { font-size: 15px; padding: 8px 12px; min-height: 38px; }
 .fb { color: var(--ink); font-size: 16.5px; line-height: 1.5; }
 .fb.ok { border-left-color: var(--good); } .fb.bad { border-left-color: var(--bad); }
@@ -353,6 +357,7 @@ details.sources { color: var(--muted); } details.sources a { color: #1F5FA8; }
 .notch span:first-child { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #9DB0C2; background: var(--ink); color: #E9EEF2; font: 700 12px/1 var(--text); position: relative; z-index: 1; }
 .notch.done span:first-child { background: var(--gold); border-color: var(--gold); color: var(--ink); }
 .notch[aria-current="step"] span:first-child { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(232, 163, 61, .45); color: #fff; }
+.notch.done[aria-current="step"] span:first-child { color: var(--ink); }   /* 2026-11-19: a white check on gold was 2.2:1 */
 .notch .tick { display: none; }
 .stepname { margin: 2px 0 0; text-align: center; color: #C9D4DF; font-size: 13px; }
 footer { background: #E3EAF1; color: var(--ink2); border-top: 0; align-items: center; }

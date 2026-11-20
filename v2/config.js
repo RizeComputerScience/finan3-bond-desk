@@ -22,7 +22,7 @@
 
   const QUIZ = [
     { title: 'Back to 2022',
-      q: 'Your Fed Brief packet showed the 2-year Treasury rate going from 0.78% to 4.41% during 2022, and the 10-year from 1.63% to 3.88%. Which rose more, and what shape did that leave the yield curve in at the end of the year?',
+      q: 'The 2022 Rates and How to Read Them showed the 2-year Treasury rate going from 0.78% to 4.41% during 2022, and the 10-year from 1.63% to 3.88%. Which rose more, and what shape did that leave the yield curve in at the end of the year?',
       options: ['The 2-year rose more, and the curve ended the year inverted, with the 2-year rate above the 10-year',
         'The 10-year rose more, and the curve ended the year normal', 'Both rose by the same amount, so the curve stayed flat',
         'The 2-year rose more, and the curve ended the year normal'],
@@ -141,7 +141,7 @@
       { label: 'Spread in percentage points', calc: `${p2d(corp)} − ${p2d(tsy)}`, num: pts, kind: 'pts', input: true },
       { label: 'Spread in basis points', calc: 'spread in points × 100', num: Math.round(pts * 100), kind: 'bps', input: true }],
     pct: (p0, p1) => [
-      { label: 'Fall, in cents on the dollar', calc: `${p0} − ${p1}`, num: p0 - p1, kind: 'cents', input: true },
+      { label: 'Fall in the quote', calc: `${p0} − ${p1}`, num: p0 - p1, kind: 'cents', input: true },
       { label: 'Percent fall', calc: 'fall ÷ starting price', num: (p0 - p1) / p0, kind: 'pct', input: true, tol: 0.006 }],
   };
   // The engine's ladder() draws text as given; filled lines and given lines show their value, input lines show a box.
@@ -161,7 +161,7 @@
     quote: { cap: 'A bond is quoted at 98.25.', lines: () => LINES.quote(98.25) },
     dur1: { cap: 'You hold $10,000 of a bond with duration 7, and rates rise 0.5 point.', lines: () => LINES.dur(7, 0.5, 10000, true) },
     spread: { cap: 'A company’s 10-year bond yields 6.10% and the 10-year Treasury yields 4.35%.', lines: () => LINES.spread(6.10, 4.35, 1.75) },
-    pr: { cap: 'A bond falls from 80 to 60 cents on the dollar.', lines: () => LINES.pct(80, 60) },
+    pr: { cap: 'A bond’s quote falls from 80 to 60.', lines: () => LINES.pct(80, 60) },
     bridge: { cap: 'A bank holds $4 billion of bonds with duration 5, and rates rise 2 points.', lines: () => LINES.bridge(4, 5, 2) },
   };
 
@@ -200,7 +200,7 @@
     spread: (t) => ({ title: 'Spread over Treasuries', place: 'Why does a company pay more to borrow than the government?',
       body: `<p>A <b>spread</b> is the extra yield a borrower pays over a Treasury bond of the same length. It pays lenders for the risk of not being repaid. A company’s 10-year bond yields <b>${p2d(t.corp)}</b>; the 10-year Treasury yields <b>${p2d(t.tsy)}</b>. What is the spread?</p>` }),
     pr: (t) => ({ title: 'One sentence that moved a market', place: 'It is October 2017. Hurricane Maria has devastated Puerto Rico, which was already in a form of bankruptcy.',
-      body: `<p>The U.S. president says Puerto Rico’s debt will have to be wiped out. Its main bond has been trading at <b>${t.p0}</b> cents on the dollar. The next day it trades as low as about <b>${t.p1}</b>. By what percent had it fallen at that low?</p>`,
+      body: `<p>The U.S. president says Puerto Rico’s debt will have to be wiped out. Its main bond has been trading at a quote of <b>${t.p0}</b>. The next day it trades as low as about <b>${t.p1}</b>. By what percent had it fallen at that low?</p>`,
       choice: { legend: 'Why did one sentence move the price so much?', options: [
         ['recover', 'Lenders now expected to get back less of what they were owed'], ['rate', 'Puerto Rico had raised the interest rate on its bonds'], ['fed', 'The Fed raised interest rates that day']] } }),
     bridge: (t) => ({ title: 'A bank’s big bet', place: 'The same calculation as the Duration step, with a bank’s numbers. This time the middle column names each line in words.',
